@@ -667,6 +667,411 @@ canvas#game { display: block; width: 100%; height: 100%; position: fixed; top: 0
   box-shadow: 0 4px 14px rgba(93,220,140,0.35);
 }
 
+/* ========== 看广告复活弹窗 ========== */
+.revive-overlay {
+  position: fixed; top: 0; right: 0; bottom: 0; left: 0;
+  background: rgba(10, 14, 20, 0.94);
+  backdrop-filter: blur(14px);
+  z-index: 9998;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  transition: opacity 0.3s;
+  opacity: 1;
+}
+.revive-overlay.hidden { opacity: 0; pointer-events: none; }
+.revive-card {
+  background: linear-gradient(180deg, rgba(40, 30, 15, 0.98), rgba(20, 18, 25, 0.98));
+  border: 1.5px solid rgba(255, 210, 76, 0.4);
+  border-radius: 24px;
+  padding: 28px 24px 22px;
+  max-width: 340px; width: 100%;
+  text-align: center;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.6), 0 0 60px rgba(255,210,76,0.15);
+  animation: tutPop 0.4s cubic-bezier(.34,1.56,.64,1);
+}
+.revive-anim { position: relative; height: 80px; margin-bottom: 8px; }
+.revive-glow {
+  position: absolute; top: 50%; left: 50%; width: 120px; height: 120px;
+  margin: -60px 0 0 -60px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,210,76,0.45) 0%, transparent 70%);
+  animation: reviveGlow 1.6s ease-in-out infinite;
+}
+@keyframes reviveGlow {
+  0%, 100% { transform: scale(0.85); opacity: 0.7; }
+  50% { transform: scale(1.1); opacity: 1; }
+}
+.revive-emoji {
+  position: absolute; top: 50%; left: 50%;
+  font-size: 64px; line-height: 1;
+  margin: -32px 0 0 -32px;
+  filter: drop-shadow(0 0 12px rgba(255,210,76,0.5));
+  animation: reviveBob 2s ease-in-out infinite;
+}
+@keyframes reviveBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.revive-title {
+  font-size: 22px; font-weight: 800;
+  color: #ffd24c; letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+.revive-sub {
+  font-size: 13px; color: #b8c2d0; line-height: 1.7;
+  margin-bottom: 18px;
+}
+.revive-hl {
+  color: #ffd24c; font-weight: 700;
+  text-shadow: 0 0 8px rgba(255,210,76,0.4);
+}
+.revive-stats {
+  display: flex; gap: 10px; margin-bottom: 18px;
+}
+.rv-cell {
+  flex: 1; padding: 10px 6px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,210,76,0.12);
+  border-radius: 12px;
+}
+.rv-cell .v {
+  font-size: 20px; font-weight: 800; color: #ffd24c;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+}
+.rv-cell .l {
+  font-size: 10px; color: #8b95a3;
+  letter-spacing: 1.5px; margin-top: 4px;
+}
+.revive-btn-primary {
+  width: 100%; padding: 14px;
+  background: linear-gradient(135deg, #ffd24c 0%, #ff8a35 100%);
+  color: #1a0f02;
+  border: none; border-radius: 14px;
+  font-size: 15px; font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(255,138,53,0.35),
+              0 2px 4px rgba(0,0,0,0.4),
+              inset 0 1px 1px rgba(255,255,255,0.4);
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  position: relative;
+  animation: reviveBtnPulse 1.4s ease-in-out infinite;
+}
+@keyframes reviveBtnPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.025); }
+}
+.revive-btn-primary .rb-ico {
+  font-size: 12px;
+  background: rgba(26,15,2,0.25); border-radius: 50%;
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+}
+.revive-btn-primary .rb-tag {
+  font-size: 10px; font-weight: 700;
+  background: rgba(26,15,2,0.25);
+  padding: 3px 8px; border-radius: 8px;
+  letter-spacing: 0.5px;
+}
+.revive-btn-skip {
+  width: 100%; padding: 11px;
+  background: transparent;
+  color: #8b95a3;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(139,149,163,0.3);
+  text-underline-offset: 3px;
+}
+.revive-countdown {
+  font-size: 10px; color: rgba(139,149,163,0.7);
+  margin-top: 8px; letter-spacing: 1px;
+}
+
+/* ========== 模拟广告页 ========== */
+.ad-overlay {
+  position: fixed; top: 0; right: 0; bottom: 0; left: 0;
+  background: linear-gradient(180deg, #1a1f2e, #0a0e14);
+  z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  padding: 32px;
+  transition: opacity 0.2s;
+}
+.ad-overlay.hidden { opacity: 0; pointer-events: none; }
+.ad-content {
+  text-align: center; max-width: 320px; width: 100%;
+  position: relative;
+}
+.ad-tag {
+  position: absolute; top: -28px; right: 0;
+  background: rgba(0,0,0,0.5);
+  color: rgba(255,255,255,0.55);
+  padding: 4px 10px; border-radius: 8px;
+  font-size: 10px; letter-spacing: 1.5px;
+  font-weight: 700;
+}
+.ad-mock {
+  background: linear-gradient(135deg, #4a3a8a, #6b2c8a);
+  border-radius: 20px; padding: 36px 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 12px 40px rgba(107,44,138,0.4);
+  animation: adShimmer 2s ease-in-out infinite;
+}
+@keyframes adShimmer {
+  0%, 100% { box-shadow: 0 12px 40px rgba(107,44,138,0.4); }
+  50% { box-shadow: 0 12px 50px rgba(167,84,228,0.55); }
+}
+.ad-emoji { font-size: 60px; line-height: 1; margin-bottom: 12px; }
+.ad-title {
+  font-size: 18px; font-weight: 800; color: #fff;
+  margin-bottom: 8px;
+}
+.ad-desc {
+  font-size: 13px; color: rgba(255,255,255,0.85);
+  line-height: 1.6;
+}
+.ad-desc small { font-size: 10px; opacity: 0.6; }
+.ad-bar {
+  width: 100%; height: 4px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.ad-bar-fill {
+  height: 100%; width: 0;
+  background: linear-gradient(90deg, #ffd24c, #5ddc8c);
+  transition: width 0.1s linear;
+  box-shadow: 0 0 8px rgba(255,210,76,0.5);
+}
+.ad-skip {
+  display: inline-block;
+  padding: 8px 18px;
+  background: rgba(255,255,255,0.08);
+  color: #e8eef4;
+  border-radius: 14px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  cursor: not-allowed;
+  user-select: none;
+  letter-spacing: 0.5px;
+  pointer-events: none;
+}
+.ad-skip.ready {
+  background: rgba(93,220,140,0.18);
+  color: #5ddc8c;
+  cursor: pointer;
+  pointer-events: auto;
+  font-weight: 700;
+}
+
+/* ========== 券商收益分享卡片（结算页改造）========== */
+/* 覆盖原 result-screen 内容布局 */
+.result-screen .result-content {
+  padding: 24px 16px 28px;
+  display: flex; flex-direction: column;
+  align-items: center; gap: 16px;
+  min-height: 100%;
+  justify-content: flex-start;
+}
+
+.brokerage-card {
+  width: 100%; max-width: 360px;
+  background: linear-gradient(160deg, #0e1420 0%, #16223a 50%, #0a0e14 100%);
+  border: 1px solid rgba(255,210,76,0.18);
+  border-radius: 22px;
+  padding: 22px 20px 18px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6),
+              0 0 0 1px rgba(255,210,76,0.06) inset,
+              0 -1px 0 rgba(255,255,255,0.04) inset;
+  position: relative;
+  overflow: hidden;
+}
+/* 卡片角落金色装饰 */
+.brokerage-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0;
+  width: 60px; height: 60px;
+  border-top: 2px solid rgba(255,210,76,0.5);
+  border-left: 2px solid rgba(255,210,76,0.5);
+  border-radius: 22px 0 0 0;
+  pointer-events: none;
+}
+.brokerage-card::after {
+  content: '';
+  position: absolute; bottom: 0; right: 0;
+  width: 60px; height: 60px;
+  border-bottom: 2px solid rgba(255,210,76,0.5);
+  border-right: 2px solid rgba(255,210,76,0.5);
+  border-radius: 0 0 22px 0;
+  pointer-events: none;
+}
+
+/* 头部 */
+.bc-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed rgba(255,255,255,0.08);
+  margin-bottom: 16px;
+}
+.bc-brand {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 14px; font-weight: 800;
+  color: #ffd24c; letter-spacing: 0.5px;
+}
+.bc-brand .bc-logo {
+  font-size: 16px;
+  filter: drop-shadow(0 0 6px rgba(255,210,76,0.5));
+}
+.bc-brand .bc-name i {
+  font-style: normal; color: #5ddc8c;
+  margin-left: 1px;
+}
+.bc-date {
+  font-size: 11px; color: #8b95a3;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 1px;
+}
+
+/* 主体 */
+.bc-body { margin-bottom: 18px; }
+.bc-stock {
+  display: flex; align-items: baseline; gap: 8px;
+  margin-bottom: 14px;
+}
+.bc-stock-name {
+  font-size: 18px; font-weight: 700;
+  color: #e8eef4;
+}
+.bc-stock-code {
+  font-size: 11px; font-weight: 600;
+  color: #8b95a3;
+  background: rgba(255,255,255,0.05);
+  padding: 2px 7px; border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+.bc-return-block {
+  text-align: center;
+  background: linear-gradient(180deg, rgba(255,210,76,0.04), transparent);
+  border-radius: 14px;
+  padding: 16px 12px 14px;
+  border: 1px solid rgba(255,210,76,0.08);
+}
+.bc-return-label {
+  font-size: 10px; letter-spacing: 2.5px;
+  color: #8b95a3; font-weight: 600;
+  margin-bottom: 6px;
+}
+.bc-return-pct {
+  font-size: 44px; font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -1px;
+  line-height: 1.05;
+  text-shadow: 0 0 24px rgba(93,220,140,0.3);
+}
+.bc-return-amount {
+  font-size: 14px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-top: 6px;
+  letter-spacing: 0.5px;
+}
+/* 涨：绿色（A股配色，但游戏中 score 越高越好用绿） */
+.bc-return-block.profit .bc-return-pct,
+.bc-return-block.profit .bc-return-amount { color: #5ddc8c; }
+.bc-return-block.profit { box-shadow: 0 0 20px rgba(93,220,140,0.08); }
+/* 跌：红色 */
+.bc-return-block.loss .bc-return-pct,
+.bc-return-block.loss .bc-return-amount { color: #ff5b5b; }
+.bc-return-block.loss { box-shadow: 0 0 20px rgba(255,91,91,0.08); }
+
+/* 净值曲线 */
+.bc-chart-wrap {
+  position: relative;
+  width: 100%; height: 78px;
+  margin-bottom: 16px;
+  background: rgba(255,255,255,0.02);
+  border-radius: 10px;
+  padding: 8px 8px 4px;
+}
+.bc-chart-wrap canvas { width: 100%; height: 100%; display: block; }
+.bc-chart-axis {
+  position: absolute; bottom: 4px; left: 10px; right: 10px;
+  display: flex; justify-content: space-between;
+  font-size: 9px; color: rgba(139,149,163,0.7);
+  letter-spacing: 0.5px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.bc-chart-end { color: #ffd24c; font-weight: 700; }
+
+/* 4 宫格指标 */
+.bc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.bc-cell {
+  background: rgba(255,255,255,0.025);
+  border-radius: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,0.04);
+}
+.bc-cell-label {
+  font-size: 10px; color: #8b95a3;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+.bc-cell-value {
+  font-size: 18px; font-weight: 700;
+  color: #e8eef4;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 评级徽章 */
+.bc-badge {
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, rgba(255,210,76,0.12), rgba(255,138,53,0.08));
+  border: 1px solid rgba(255,210,76,0.25);
+  border-radius: 10px;
+  margin-bottom: 14px;
+}
+.bc-badge-emoji { font-size: 20px; line-height: 1; }
+.bc-badge-text {
+  font-size: 13px; font-weight: 700;
+  color: #ffd24c;
+  letter-spacing: 0.5px;
+}
+
+/* 底部 */
+.bc-footer {
+  border-top: 1px dashed rgba(255,255,255,0.08);
+  padding-top: 12px;
+  text-align: center;
+}
+.bc-quote {
+  font-size: 11px; color: rgba(232,238,244,0.55);
+  font-style: italic;
+  line-height: 1.5;
+  margin-bottom: 5px;
+}
+.bc-sign {
+  font-size: 9px; color: rgba(139,149,163,0.7);
+  letter-spacing: 1.5px;
+}
+
+/* 按钮区放在卡片外 */
+.result-screen .result-buttons {
+  width: 100%; max-width: 360px;
+  display: flex; flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
 </style>
 </head>
 <body>
@@ -803,26 +1208,79 @@ canvas#game { display: block; width: 100%; height: 100%; position: fixed; top: 0
   </div>
 </div>
 
-<!-- ========== 结算页（GAME OVER 醒目化）========== -->
+<!-- ========== 结算页：券商收益分享卡片 ========== -->
 <div class="result-screen hidden" id="resultScreen">
-  <div class="result-bg-anim" id="resultBgAnim"></div>
   <div class="result-content">
-    <div class="result-emoji" id="resultEmoji">🏆</div>
-    <div class="result-title-big" id="resultTitle">恭喜成为巴菲特！</div>
-    <div class="result-sub" id="resultSub">--</div>
+    <!-- 收益卡片本体 -->
+    <div class="brokerage-card" id="brokerageCard">
+      <!-- 头部：品牌 + 日期 -->
+      <div class="bc-header">
+        <div class="bc-brand">
+          <span class="bc-logo">📈</span>
+          <span class="bc-name">巴菲特<i>JUMP</i></span>
+        </div>
+        <div class="bc-date" id="bcDate">2026-06-15</div>
+      </div>
 
-    <div class="result-stats">
-      <div class="result-stat"><div class="v" id="resScore">0</div><div class="l">SCORE</div></div>
-      <div class="result-stat"><div class="v" id="resCombo">×0</div><div class="l">MAX COMBO</div></div>
-      <div class="result-stat"><div class="v" id="resPerf">0</div><div class="l">PERFECTS</div></div>
-      <div class="result-stat"><div class="v" id="resJumps">0</div><div class="l">JUMPS</div></div>
+      <!-- 主体：标的名 + 大字收益率 -->
+      <div class="bc-body">
+        <div class="bc-stock">
+          <span class="bc-stock-name" id="bcStockName">英伟达</span>
+          <span class="bc-stock-code" id="bcStockCode">NVDA</span>
+        </div>
+        <div class="bc-return-block" id="bcReturnBlock">
+          <div class="bc-return-label">本日收益率</div>
+          <div class="bc-return-pct" id="bcReturnPct">+128.5%</div>
+          <div class="bc-return-amount" id="bcReturnAmount">+12,850</div>
+        </div>
+      </div>
+
+      <!-- 净值曲线（缩略图） -->
+      <div class="bc-chart-wrap">
+        <canvas id="bcChart"></canvas>
+        <div class="bc-chart-axis">
+          <span id="bcChartStart">起跳</span>
+          <span id="bcChartEnd" class="bc-chart-end">第 38 根</span>
+        </div>
+      </div>
+
+      <!-- 4 宫格指标 -->
+      <div class="bc-grid">
+        <div class="bc-cell">
+          <div class="bc-cell-label">完赛进度</div>
+          <div class="bc-cell-value" id="bcProgress">38/100</div>
+        </div>
+        <div class="bc-cell">
+          <div class="bc-cell-label">最高连击</div>
+          <div class="bc-cell-value" id="bcCombo">×7</div>
+        </div>
+        <div class="bc-cell">
+          <div class="bc-cell-label">完美落地</div>
+          <div class="bc-cell-value" id="bcPerfect">12</div>
+        </div>
+        <div class="bc-cell">
+          <div class="bc-cell-label">击败玩家</div>
+          <div class="bc-cell-value" id="bcRank">36%</div>
+        </div>
+      </div>
+
+      <!-- 评级标签 -->
+      <div class="bc-badge" id="bcBadge">
+        <span class="bc-badge-emoji" id="bcBadgeEmoji">😭</span>
+        <span class="bc-badge-text" id="bcBadgeText">亏麻了 · 散户A股选手</span>
+      </div>
+
+      <!-- 底部签名 -->
+      <div class="bc-footer">
+        <div class="bc-quote" id="bcQuote">"市场短期是投票机，长期是称重机。"</div>
+        <div class="bc-sign">— 你也能成为巴菲特 ·  K 线跳一跳</div>
+      </div>
     </div>
 
-    <div class="ghost-rank" id="ghostRank"></div>
-
+    <!-- 操作按钮（不在卡片内，避免分享时也截到按钮） -->
     <div class="result-buttons">
       <button class="btn-primary" id="retryBtn">再来一局</button>
-      <button class="btn-secondary" id="shareBtn">保存战绩图</button>
+      <button class="btn-secondary" id="shareBtn">📷 保存分享图</button>
       <button class="btn-secondary" id="backBtn">换一只股</button>
     </div>
   </div>
@@ -854,6 +1312,43 @@ canvas#game { display: block; width: 100%; height: 100%; position: fixed; top: 0
       <button class="btn-secondary tut-skip" id="tutSkipBtn">跳过</button>
       <button class="btn-primary tut-next" id="tutNextBtn">继续</button>
     </div>
+  </div>
+</div>
+
+<!-- ========== 看广告复活弹窗 ========== -->
+<div class="revive-overlay hidden" id="reviveOverlay">
+  <div class="revive-card">
+    <div class="revive-anim">
+      <div class="revive-emoji">👴</div>
+      <div class="revive-glow"></div>
+    </div>
+    <div class="revive-title">差一点就上岸了</div>
+    <div class="revive-sub">看一段广告，<span class="revive-hl">满血复活</span><br>继续把这一波 K 线跳完</div>
+    <div class="revive-stats">
+      <div class="rv-cell"><div class="v" id="reviveScore">0</div><div class="l">当前分数</div></div>
+      <div class="rv-cell"><div class="v" id="reviveProgress">0/0</div><div class="l">已跳进度</div></div>
+    </div>
+    <button class="revive-btn-primary" id="reviveAdBtn">
+      <span class="rb-ico">▶</span>
+      <span class="rb-txt">看广告复活</span>
+      <span class="rb-tag">+100 信心</span>
+    </button>
+    <button class="revive-btn-skip" id="reviveSkipBtn">不了，看战绩</button>
+    <div class="revive-countdown" id="reviveCountdown">8s 后自动放弃</div>
+  </div>
+</div>
+
+<!-- ========== 模拟广告播放页 ========== -->
+<div class="ad-overlay hidden" id="adOverlay">
+  <div class="ad-content">
+    <div class="ad-tag">广告 · DEMO</div>
+    <div class="ad-mock">
+      <div class="ad-emoji">📺</div>
+      <div class="ad-title">恭喜你即将解锁财富自由</div>
+      <div class="ad-desc">每天 5 分钟，月入 30 万<br><small>（这只是个 demo 占位广告）</small></div>
+    </div>
+    <div class="ad-bar"><div class="ad-bar-fill" id="adBarFill"></div></div>
+    <div class="ad-skip" id="adSkipBtn">5</div>
   </div>
 </div>
 
@@ -3645,6 +4140,8 @@ function newGame() {
     visitedTopPillars: { 0: true }, // 玩家踏过的柱顶 idx
     needRecover: false,        // 在平底，需要爬回柱顶
     camY: initialCamY,          // 相机 Y 偏移（让玩家保持屏幕中央）
+    reviveUsed: false,          // 是否已使用过本局唯一一次复活
+    reviveDialogOpen: false,    // 复活弹窗是否打开（避免重复触发）
   };
 }
 
@@ -3962,7 +4459,14 @@ function update(dt) {
 
   // 完赛
   if (c.x >= game.track.totalDist) endGame('win', '收盘走完30日');
-  if (game.confidence <= 0) endGame('lose', '信心崩塌，今日亏麻了');
+  // 信心崩塌：第一次先弹"看广告复活"，拒绝才真 GAME OVER
+  if (game.confidence <= 0) {
+    if (!game.reviveUsed && !game.reviveDialogOpen) {
+      tryShowReviveDialog();
+    } else {
+      endGame('lose', '信心崩塌，今日亏麻了');
+    }
+  }
 
   // 粒子
   game.particles = game.particles.filter(p => {
@@ -4115,8 +4619,11 @@ function respawnToLastPillar() {
   game.shake = 0.7;
   spawnParticles(20, '#ff5b5b');
   playFallSound();
-  showTrappedOverlay(CFG.confLossOnFall);
-  showJudge('fell');
+  // 信心还有则正常弹"深套"提示；扣到 0 就让 update 直接弹复活弹窗
+  if (game.confidence > 0) {
+    showTrappedOverlay(CFG.confLossOnFall);
+    showJudge('fell');
+  }
 
   // 启动落地停顿
   game.landingPauseRemain = CFG.landingPauseMs / 1000;
@@ -5323,6 +5830,134 @@ function showTrappedOverlay(confLoss) {
   setTimeout(() => trappedOverlay.classList.add('hidden'), 1100);
 }
 
+// ============ 看广告复活 ============
+let reviveCountdownTimer = null;
+function tryShowReviveDialog() {
+  if (!game) return;
+  if (game.reviveUsed) return;          // 每局仅一次
+  if (game.reviveDialogOpen) return;
+  game.reviveDialogOpen = true;
+  game.state = 'revive_pending';        // 暂停游戏循环
+  stopBGM();
+
+  // 填充弹窗数据
+  $('reviveScore').textContent = Math.floor(game.score).toLocaleString();
+  $('reviveProgress').textContent = (game.char.pillarIdx) + '/' + game.track.pillars.length;
+
+  $('reviveOverlay').classList.remove('hidden');
+  trappedOverlay.classList.add('hidden');
+
+  // 8 秒倒计时自动放弃
+  let remain = 8;
+  $('reviveCountdown').textContent = remain + 's 后自动放弃';
+  if (reviveCountdownTimer) clearInterval(reviveCountdownTimer);
+  reviveCountdownTimer = setInterval(() => {
+    remain--;
+    $('reviveCountdown').textContent = remain + 's 后自动放弃';
+    if (remain <= 0) {
+      clearInterval(reviveCountdownTimer);
+      reviveCountdownTimer = null;
+      if (game && game.reviveDialogOpen) declineRevive();
+    }
+  }, 1000);
+}
+
+function closeReviveCountdown() {
+  if (reviveCountdownTimer) {
+    clearInterval(reviveCountdownTimer);
+    reviveCountdownTimer = null;
+  }
+}
+
+function declineRevive() {
+  closeReviveCountdown();
+  $('reviveOverlay').classList.add('hidden');
+  if (!game) return;
+  game.reviveDialogOpen = false;
+  game.state = 'playing';   // 临时改回，让 endGame 能执行
+  endGame('lose', '信心崩塌，今日亏麻了');
+}
+
+function startWatchAd() {
+  closeReviveCountdown();
+  $('reviveOverlay').classList.add('hidden');
+  $('adOverlay').classList.remove('hidden');
+
+  const total = 5;          // 5 秒模拟广告
+  let elapsed = 0;
+  const fill = $('adBarFill');
+  const skip = $('adSkipBtn');
+  skip.classList.remove('ready');
+  fill.style.width = '0%';
+  skip.textContent = total + 's';
+
+  const t0 = performance.now();
+  const adTimer = setInterval(() => {
+    elapsed = (performance.now() - t0) / 1000;
+    const pct = Math.min(1, elapsed / total);
+    fill.style.width = (pct * 100) + '%';
+    const remain = Math.max(0, Math.ceil(total - elapsed));
+    if (pct < 1) {
+      skip.textContent = remain + 's';
+    } else {
+      skip.textContent = '点击关闭 ✓';
+      skip.classList.add('ready');
+      clearInterval(adTimer);
+      // 用户必须点击关闭才完成（模拟真实广告）
+    }
+  }, 100);
+
+  // 让 adSkipBtn 在 ready 时点击 = 完成复活
+  const skipHandler = (e) => {
+    e.stopPropagation();
+    if (!skip.classList.contains('ready')) return;
+    skip.removeEventListener('click', skipHandler);
+    finishRevive();
+  };
+  // 移除旧监听再绑（避免重复）
+  skip.replaceWith(skip.cloneNode(true));
+  const newSkip = $('adSkipBtn');
+  newSkip.addEventListener('click', skipHandler);
+}
+
+function finishRevive() {
+  $('adOverlay').classList.add('hidden');
+  if (!game) return;
+  game.reviveUsed = true;
+  game.reviveDialogOpen = false;
+  // 满血复活
+  game.confidence = CFG.initConfidence;
+  game.combo = 0;
+  // 弹回最后一个站稳的柱子
+  const c = game.char;
+  let backIdx = c.pillarIdx;
+  while (backIdx > 0 && !game.visitedTopPillars[backIdx]) backIdx--;
+  const p = game.track.pillars[backIdx];
+  c.x = p.centerX; c.y = p.topY;
+  c.vx = 0; c.vy = 0;
+  c.onPillar = true; c.onGround = false;
+  c.pillarIdx = p.idx;
+  c.fallingIntoVoid = false;
+  c.voidFallTimer = 0;
+  // 视觉反馈
+  game.flashGreen = 0.6;
+  game.shake = 0.3;
+  spawnParticles(40, '#ffd24c');
+  showToast('💪 满血复活！再战 K 线！', 1800);
+  game.state = 'playing';
+  startBGM();
+  playPerfectSound();
+}
+
+document.addEventListener('DOMContentLoaded', () => {});
+// 弹窗按钮事件（在 DOM 加载后绑）
+window.addEventListener('load', () => {
+  const adBtn = $('reviveAdBtn');
+  const skipBtn = $('reviveSkipBtn');
+  if (adBtn) adBtn.addEventListener('click', e => { e.stopPropagation(); startWatchAd(); });
+  if (skipBtn) skipBtn.addEventListener('click', e => { e.stopPropagation(); declineRevive(); });
+});
+
 function endGame(result, msg) {
   if (game.state !== 'playing') return;
   game.state = result;
@@ -5334,55 +5969,208 @@ function endGame(result, msg) {
 
   if (result === 'win') game.score += Math.floor(game.confidence * 20);
 
-  // 醒目结算页
   resultScreen.classList.toggle('lose', result === 'lose');
 
-  // 表情 + 标题
+  // === 填充券商分享卡片 ===
   const isWin = result === 'win';
-  let emoji, title;
   const score = Math.floor(game.score);
+  const totalPillars = game.track.pillars.length;
+  const reachedIdx = Math.min(game.char.pillarIdx, totalPillars - 1);
+  const completion = (reachedIdx / (totalPillars - 1));   // 0..1
+
+  // 1. 日期
+  const d = new Date();
+  $('bcDate').textContent = d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+
+  // 2. 标的
+  $('bcStockName').textContent = game.level.name;
+  $('bcStockCode').textContent = game.level.code;
+
+  // 3. 模拟收益率（基于 score 反推）
+  // 设计：完赛+爆分 ≈ +200%，亏麻 ≈ -80%
+  // 公式：本金 10000，最终资产 = 10000 + score（上限 +200%）/ 信心耗尽 = 10000 - (1-completion)*8000
+  let returnAmount, returnPct;
   if (isWin) {
-    if (score >= 18000) { emoji = '🏆'; title = '股神巴菲特！'; }
-    else if (score >= 12000) { emoji = '💰'; title = '价值投资大师！'; }
-    else if (score >= 6000) { emoji = '😎'; title = '韭菜逆袭成功！'; }
-    else { emoji = '🎉'; title = '勉强通关！'; }
+    returnAmount = score;
+    returnPct = (score / 10000) * 100;
   } else {
-    const completion = (game.char.pillarIdx / game.track.pillars.length * 100);
-    if (completion < 20) { emoji = '😭'; title = '亏麻了'; }
-    else if (completion < 50) { emoji = '💸'; title = '腰斩'; }
-    else if (completion < 80) { emoji = '😵'; title = '半道爆仓'; }
-    else { emoji = '🥲'; title = '差一点上岸'; }
+    // 亏损：根据完成度
+    // 完成 0% → -80%，完成 50% → -30%，完成 80% → -5%
+    const lossPct = -(1 - completion) * 80;
+    returnPct = lossPct + (score / 10000) * 30;   // score 拉一点
+    returnAmount = Math.floor(10000 * returnPct / 100);
   }
-  $('resultEmoji').textContent = emoji;
-  $('resultTitle').textContent = title;
-  $('resultSub').textContent = isWin
-    ? `${game.level.name} · ${game.elapsed.toFixed(1)}s 完赛`
-    : `${game.level.name} · 跳了 ${game.char.pillarIdx}/${game.track.pillars.length} 根`;
+  const returnBlock = $('bcReturnBlock');
+  returnBlock.classList.remove('profit', 'loss');
+  if (returnPct >= 0) {
+    returnBlock.classList.add('profit');
+    $('bcReturnPct').textContent = '+' + returnPct.toFixed(1) + '%';
+    $('bcReturnAmount').textContent = '+' + returnAmount.toLocaleString();
+  } else {
+    returnBlock.classList.add('loss');
+    $('bcReturnPct').textContent = returnPct.toFixed(1) + '%';
+    $('bcReturnAmount').textContent = returnAmount.toLocaleString();
+  }
 
-  $('resScore').textContent = score.toLocaleString();
-  $('resCombo').textContent = '×' + game.maxCombo;
-  $('resPerf').textContent = game.perfects;
-  $('resJumps').textContent = game.char.pillarIdx;
+  // 4. 净值曲线
+  drawBrokerageChart(reachedIdx);
 
-  // 保存 best（按时间窗口区分）
+  // 5. 4 宫格指标
+  $('bcProgress').textContent = (reachedIdx + 1) + '/' + totalPillars;
+  $('bcCombo').textContent = '×' + game.maxCombo;
+  $('bcPerfect').textContent = game.perfects;
+  // 击败玩家百分比（基于 score 与三个 ghost 的比较 + 一些随机扰动）
+  const ghostScores = GHOSTS.map(g => g.score);
+  const beats = ghostScores.filter(gs => score > gs).length;
+  let beatRank;
+  if (isWin) beatRank = 80 + Math.min(19, Math.floor(score / 1000));
+  else beatRank = Math.floor(beats / GHOSTS.length * 50) + Math.floor(completion * 30);
+  beatRank = Math.max(2, Math.min(99, beatRank));
+  $('bcRank').textContent = beatRank + '%';
+
+  // 6. 评级标签
+  let badgeEmoji, badgeText;
+  if (isWin) {
+    if (score >= 18000) { badgeEmoji = '🏆'; badgeText = '股神级别 · 巴菲特本菲'; }
+    else if (score >= 12000) { badgeEmoji = '💰'; badgeText = '价值大师 · 长期持有'; }
+    else if (score >= 6000) { badgeEmoji = '😎'; badgeText = '韭菜逆袭 · 抄底成功'; }
+    else { badgeEmoji = '🎉'; badgeText = '勉强保本 · 落袋为安'; }
+  } else {
+    if (completion < 0.20) { badgeEmoji = '😭'; badgeText = '亏麻了 · 散户A组'; }
+    else if (completion < 0.50) { badgeEmoji = '💸'; badgeText = '腰斩 · 套牢盘选手'; }
+    else if (completion < 0.80) { badgeEmoji = '😵'; badgeText = '半道爆仓 · 高位接盘'; }
+    else { badgeEmoji = '🥲'; badgeText = '差一点上岸 · 涨停在望'; }
+  }
+  $('bcBadgeEmoji').textContent = badgeEmoji;
+  $('bcBadgeText').textContent = badgeText;
+
+  // 7. 大佬名言（随机一条契合的）
+  const QUOTES = isWin ? [
+    '"在别人贪婪时恐惧，在别人恐惧时贪婪。"',
+    '"我从不试图猜测市场，我只是不为之所动。"',
+    '"风险来自于你不知道自己在做什么。"',
+    '"如果你不愿意持有十年，就不要持有十分钟。"',
+  ] : [
+    '"市场短期是投票机，长期是称重机。"',
+    '"亏损不是问题，从亏损中学不到东西才是问题。"',
+    '"投资最大的敌人是你自己。"',
+    '"只有当潮水退去，才知道谁在裸泳。"',
+  ];
+  $('bcQuote').textContent = QUOTES[Math.floor(Math.random() * QUOTES.length)];
+
+  // 保存 best
   const bestKey = 'best_' + game.level.code + '_' + (game.level.timeframe || 'day');
   const oldBest = parseInt(localStorage.getItem(bestKey)) || 0;
   if (score > oldBest) {
     localStorage.setItem(bestKey, score);
   }
 
-  const ranks = [...GHOSTS, { name: '你', score, color: '#5ddc8c', you: true }]
-    .sort((a, b) => b.score - a.score);
-  $('ghostRank').innerHTML = ranks.map((r, i) => `
-    <div class="rank-row${r.you ? ' you' : ''}">
-      <span class="pos">${i+1}</span>
-      <span class="name" style="color:${r.color}">${r.name}</span>
-      <span class="t">${r.score.toLocaleString()}</span>
-    </div>
-  `).join('');
-
   stopBGM();
   setTimeout(() => resultScreen.classList.remove('hidden'), 400);
+}
+
+// 绘制结算卡片里的迷你净值曲线
+function drawBrokerageChart(reachedIdx) {
+  const canvas = $('bcChart');
+  if (!canvas) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  if (!w || !h) {
+    setTimeout(() => drawBrokerageChart(reachedIdx), 100);
+    return;
+  }
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const c = canvas.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+
+  // 用本局玩的 K 线 close 价格画一条净值曲线
+  const bars = game.level.bars;
+  if (!bars || !bars.length) return;
+  const closes = bars.map(b => b.c);
+  const minP = Math.min(...closes);
+  const maxP = Math.max(...closes);
+  const range = maxP - minP || 1;
+
+  const padX = 10, padY = 12;
+  const innerW = w - padX * 2;
+  const innerH = h - padY * 2 - 8;
+
+  // 画到玩家到达的位置
+  const visibleN = Math.max(2, reachedIdx + 1);
+  const xStep = innerW / Math.max(1, bars.length - 1);
+
+  // 已玩部分（实线）
+  const grad = c.createLinearGradient(0, padY, 0, padY + innerH);
+  // 根据收益判断红绿
+  const isProfit = $('bcReturnBlock').classList.contains('profit');
+  const lineColor = isProfit ? '#5ddc8c' : '#ff5b5b';
+  const fillTop = isProfit ? 'rgba(93,220,140,0.35)' : 'rgba(255,91,91,0.35)';
+  const fillBot = isProfit ? 'rgba(93,220,140,0.0)' : 'rgba(255,91,91,0.0)';
+  grad.addColorStop(0, fillTop);
+  grad.addColorStop(1, fillBot);
+
+  // 填充区
+  c.beginPath();
+  c.moveTo(padX, padY + innerH);
+  for (let i = 0; i < visibleN; i++) {
+    const x = padX + i * xStep;
+    const y = padY + innerH - ((closes[i] - minP) / range) * innerH;
+    if (i === 0) c.lineTo(x, y);
+    else c.lineTo(x, y);
+  }
+  c.lineTo(padX + (visibleN - 1) * xStep, padY + innerH);
+  c.closePath();
+  c.fillStyle = grad;
+  c.fill();
+
+  // 主线
+  c.strokeStyle = lineColor;
+  c.lineWidth = 2;
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  c.beginPath();
+  for (let i = 0; i < visibleN; i++) {
+    const x = padX + i * xStep;
+    const y = padY + innerH - ((closes[i] - minP) / range) * innerH;
+    if (i === 0) c.moveTo(x, y);
+    else c.lineTo(x, y);
+  }
+  c.stroke();
+
+  // 未玩部分（虚线，灰色）
+  if (visibleN < bars.length) {
+    c.setLineDash([3, 4]);
+    c.strokeStyle = 'rgba(139,149,163,0.4)';
+    c.lineWidth = 1.2;
+    c.beginPath();
+    for (let i = visibleN - 1; i < bars.length; i++) {
+      const x = padX + i * xStep;
+      const y = padY + innerH - ((closes[i] - minP) / range) * innerH;
+      if (i === visibleN - 1) c.moveTo(x, y);
+      else c.lineTo(x, y);
+    }
+    c.stroke();
+    c.setLineDash([]);
+  }
+
+  // 末端小圆点（玩家停下的地方）
+  const endX = padX + (visibleN - 1) * xStep;
+  const endY = padY + innerH - ((closes[visibleN - 1] - minP) / range) * innerH;
+  c.fillStyle = lineColor;
+  c.beginPath();
+  c.arc(endX, endY, 4, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = '#fff';
+  c.beginPath();
+  c.arc(endX, endY, 1.5, 0, Math.PI * 2);
+  c.fill();
+
+  // 更新轴标签
+  $('bcChartStart').textContent = bars[0].date || '起跳';
+  $('bcChartEnd').textContent = '第 ' + visibleN + ' 根';
 }
 
 startBtn.addEventListener('click', e => { e.stopPropagation(); openDetail(0); });
@@ -5451,52 +6239,221 @@ function showToast(msg, ms=1500) {
   setTimeout(() => toast.classList.remove('show'), ms);
 }
 
-// ============ 分享卡片 ============
+// ============ 分享卡片（基于券商收益卡风格）============
 function generateShareCard() {
   const c = document.createElement('canvas');
   const w = 720, h = 1280;
   c.width = w; c.height = h;
   const x = c.getContext('2d');
-  const g = x.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, '#0a0e14'); g.addColorStop(1, '#1a2030');
-  x.fillStyle = g; x.fillRect(0, 0, w, h);
-  x.fillStyle = '#5ddc8c'; x.font = 'bold 64px -apple-system'; x.textAlign = 'center';
-  x.fillText('你也能成为巴菲特', w/2, 120);
-  x.fillStyle = '#8b95a3'; x.font = '22px -apple-system';
-  x.fillText('巴菲特跳K线', w/2, 158);
-  x.fillStyle = '#fff'; x.font = 'bold 56px -apple-system';
-  x.fillText(game.level.name, w/2, 280);
-  x.fillStyle = '#8b95a3'; x.font = '20px -apple-system';
-  x.fillText(game.level.code, w/2, 312);
-  x.fillStyle = game.state === 'win' ? '#5ddc8c' : '#ff5b5b';
-  x.font = 'bold 200px -apple-system';
-  x.fillText(Math.floor(game.score).toLocaleString(), w/2, 540);
-  x.fillStyle = '#8b95a3'; x.font = '24px -apple-system';
-  x.fillText('SCORE', w/2, 580);
-  const stats = [
-    ['用时', game.elapsed.toFixed(1) + 's'],
-    ['最高连击', '×' + game.maxCombo],
-    ['完美次数', game.perfects + '次'],
-    ['结果', game.state === 'win' ? '🏁 完赛' : '💔 爆仓']
+
+  // 背景
+  const bg = x.createLinearGradient(0, 0, w, h);
+  bg.addColorStop(0, '#0e1420');
+  bg.addColorStop(0.5, '#16223a');
+  bg.addColorStop(1, '#0a0e14');
+  x.fillStyle = bg; x.fillRect(0, 0, w, h);
+
+  // 金色边框装饰
+  x.strokeStyle = 'rgba(255,210,76,0.5)';
+  x.lineWidth = 4;
+  // 左上角
+  x.beginPath();
+  x.moveTo(40, 200); x.lineTo(40, 40); x.lineTo(200, 40);
+  x.stroke();
+  // 右下角
+  x.beginPath();
+  x.moveTo(w - 200, h - 40); x.lineTo(w - 40, h - 40); x.lineTo(w - 40, h - 200);
+  x.stroke();
+
+  // === 头部：品牌 + 日期 ===
+  x.fillStyle = '#ffd24c';
+  x.font = 'bold 36px -apple-system, "PingFang SC"';
+  x.textAlign = 'left';
+  x.fillText('📈 巴菲特JUMP', 60, 130);
+
+  const d = new Date();
+  const dateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  x.fillStyle = '#8b95a3';
+  x.font = '24px -apple-system';
+  x.textAlign = 'right';
+  x.fillText(dateStr, w - 60, 130);
+
+  // 分隔线
+  x.strokeStyle = 'rgba(255,255,255,0.1)';
+  x.lineWidth = 1;
+  x.setLineDash([6, 6]);
+  x.beginPath(); x.moveTo(60, 170); x.lineTo(w - 60, 170); x.stroke();
+  x.setLineDash([]);
+
+  // === 标的 ===
+  x.fillStyle = '#e8eef4';
+  x.font = 'bold 48px -apple-system, "PingFang SC"';
+  x.textAlign = 'left';
+  x.fillText(game.level.name, 60, 240);
+  x.fillStyle = '#8b95a3';
+  x.font = '24px -apple-system';
+  x.fillText(game.level.code, 60, 280);
+
+  // === 大字收益率 ===
+  const isProfit = $('bcReturnBlock').classList.contains('profit');
+  const pctText = $('bcReturnPct').textContent;
+  const amtText = $('bcReturnAmount').textContent;
+
+  // 收益区背景
+  const retBg = x.createLinearGradient(60, 320, w - 60, 540);
+  if (isProfit) {
+    retBg.addColorStop(0, 'rgba(93,220,140,0.15)');
+    retBg.addColorStop(1, 'rgba(93,220,140,0.02)');
+  } else {
+    retBg.addColorStop(0, 'rgba(255,91,91,0.15)');
+    retBg.addColorStop(1, 'rgba(255,91,91,0.02)');
+  }
+  x.fillStyle = retBg;
+  roundRect(x, 60, 330, w - 120, 220, 20);
+  x.fill();
+
+  x.fillStyle = '#8b95a3';
+  x.font = '22px -apple-system';
+  x.textAlign = 'center';
+  x.fillText('本日收益率', w/2, 380);
+
+  x.fillStyle = isProfit ? '#5ddc8c' : '#ff5b5b';
+  x.font = 'bold 110px -apple-system';
+  x.fillText(pctText, w/2, 490);
+
+  x.font = 'bold 32px -apple-system';
+  x.fillText(amtText, w/2, 540);
+
+  // === 净值曲线（缩略画）===
+  const chartTop = 600, chartH = 160, chartL = 60, chartR = w - 60;
+  x.fillStyle = 'rgba(255,255,255,0.03)';
+  roundRect(x, chartL, chartTop, chartR - chartL, chartH, 12);
+  x.fill();
+
+  const bars = game.level.bars;
+  const closes = bars.map(b => b.c);
+  const minP = Math.min(...closes);
+  const maxP = Math.max(...closes);
+  const range = maxP - minP || 1;
+  const reachedIdx = Math.min(game.char.pillarIdx, bars.length - 1);
+  const visibleN = Math.max(2, reachedIdx + 1);
+  const cw = chartR - chartL - 40;
+  const ch = chartH - 40;
+  const xStep = cw / Math.max(1, bars.length - 1);
+
+  // 已玩部分填充
+  const lineColor = isProfit ? '#5ddc8c' : '#ff5b5b';
+  const fillTop = isProfit ? 'rgba(93,220,140,0.3)' : 'rgba(255,91,91,0.3)';
+  const fillBot = isProfit ? 'rgba(93,220,140,0.0)' : 'rgba(255,91,91,0.0)';
+  const grad = x.createLinearGradient(0, chartTop + 20, 0, chartTop + chartH - 20);
+  grad.addColorStop(0, fillTop); grad.addColorStop(1, fillBot);
+  x.fillStyle = grad;
+  x.beginPath();
+  x.moveTo(chartL + 20, chartTop + chartH - 20);
+  for (let i = 0; i < visibleN; i++) {
+    const px = chartL + 20 + i * xStep;
+    const py = chartTop + chartH - 20 - ((closes[i] - minP) / range) * ch;
+    x.lineTo(px, py);
+  }
+  x.lineTo(chartL + 20 + (visibleN - 1) * xStep, chartTop + chartH - 20);
+  x.closePath(); x.fill();
+  // 主线
+  x.strokeStyle = lineColor; x.lineWidth = 4;
+  x.lineCap = 'round'; x.lineJoin = 'round';
+  x.beginPath();
+  for (let i = 0; i < visibleN; i++) {
+    const px = chartL + 20 + i * xStep;
+    const py = chartTop + chartH - 20 - ((closes[i] - minP) / range) * ch;
+    if (i === 0) x.moveTo(px, py); else x.lineTo(px, py);
+  }
+  x.stroke();
+  // 未玩部分（虚线）
+  if (visibleN < bars.length) {
+    x.setLineDash([6, 8]);
+    x.strokeStyle = 'rgba(139,149,163,0.4)'; x.lineWidth = 2;
+    x.beginPath();
+    for (let i = visibleN - 1; i < bars.length; i++) {
+      const px = chartL + 20 + i * xStep;
+      const py = chartTop + chartH - 20 - ((closes[i] - minP) / range) * ch;
+      if (i === visibleN - 1) x.moveTo(px, py); else x.lineTo(px, py);
+    }
+    x.stroke(); x.setLineDash([]);
+  }
+  // 末端圆点
+  const endX = chartL + 20 + (visibleN - 1) * xStep;
+  const endY = chartTop + chartH - 20 - ((closes[visibleN - 1] - minP) / range) * ch;
+  x.fillStyle = lineColor;
+  x.beginPath(); x.arc(endX, endY, 8, 0, Math.PI * 2); x.fill();
+  x.fillStyle = '#fff';
+  x.beginPath(); x.arc(endX, endY, 3, 0, Math.PI * 2); x.fill();
+
+  // === 4 宫格指标 ===
+  const cells = [
+    ['完赛进度', $('bcProgress').textContent],
+    ['最高连击', $('bcCombo').textContent],
+    ['完美落地', $('bcPerfect').textContent],
+    ['击败玩家', $('bcRank').textContent],
   ];
-  stats.forEach((s, i) => {
-    const cx = (i % 2) * (w/2) + w/4;
-    const cy = 720 + Math.floor(i/2) * 120;
-    x.fillStyle = '#8b95a3'; x.font = '20px -apple-system'; x.fillText(s[0], cx, cy);
-    x.fillStyle = '#fff'; x.font = 'bold 36px -apple-system'; x.fillText(s[1], cx, cy + 50);
+  const gridTop = 810, gridGap = 18, cellW = (w - 120 - gridGap) / 2, cellH = 100;
+  cells.forEach((cell, i) => {
+    const cx = 60 + (i % 2) * (cellW + gridGap);
+    const cy = gridTop + Math.floor(i / 2) * (cellH + gridGap);
+    x.fillStyle = 'rgba(255,255,255,0.03)';
+    roundRect(x, cx, cy, cellW, cellH, 14); x.fill();
+    x.fillStyle = '#8b95a3';
+    x.font = '22px -apple-system';
+    x.textAlign = 'left';
+    x.fillText(cell[0], cx + 20, cy + 36);
+    x.fillStyle = '#e8eef4';
+    x.font = 'bold 38px -apple-system';
+    x.fillText(cell[1], cx + 20, cy + 80);
   });
-  x.fillStyle = '#5ddc8c'; x.font = '22px -apple-system';
-  x.fillText('▲ 你也能成为巴菲特 · ' + game.level.name + ' ▲', w/2, h - 80);
-  x.fillStyle = '#555'; x.font = '18px -apple-system';
-  x.fillText('stonkrider.demo', w/2, h - 40);
+
+  // === 评级徽章 ===
+  const badgeY = 1050;
+  const badgeText = $('bcBadgeEmoji').textContent + '  ' + $('bcBadgeText').textContent;
+  x.fillStyle = 'rgba(255,210,76,0.12)';
+  roundRect(x, 60, badgeY, w - 120, 70, 14); x.fill();
+  x.strokeStyle = 'rgba(255,210,76,0.3)'; x.lineWidth = 1.5;
+  roundRect(x, 60, badgeY, w - 120, 70, 14); x.stroke();
+  x.fillStyle = '#ffd24c';
+  x.font = 'bold 28px -apple-system, "PingFang SC"';
+  x.textAlign = 'center';
+  x.fillText(badgeText, w/2, badgeY + 45);
+
+  // === 名言 ===
+  x.fillStyle = 'rgba(232,238,244,0.6)';
+  x.font = 'italic 22px -apple-system, "PingFang SC"';
+  x.textAlign = 'center';
+  const quote = $('bcQuote').textContent;
+  x.fillText(quote, w/2, 1180);
+
+  // 底部签名
+  x.fillStyle = 'rgba(139,149,163,0.7)';
+  x.font = '18px -apple-system';
+  x.fillText('— 你也能成为巴菲特 · K线跳一跳 —', w/2, 1220);
+
   c.toBlob(blob => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `stonkrider_${game.level.code}_${Math.floor(game.score)}.png`;
+    a.download = `buffett_jump_${game.level.code}_${Math.floor(game.score)}.png`;
     a.click();
-    showToast('战绩图已保存');
+    showToast('战绩图已保存', 1800);
   }, 'image/png');
+}
+
+// roundRect helper（如果还没定义）
+if (typeof roundRect === 'undefined') {
+  window.roundRect = function(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  };
 }
 
 // ============ 初始化完成：隐藏加载指示器 ============
