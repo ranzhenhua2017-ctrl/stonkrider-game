@@ -7,8 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0a0e14">
 <title>你也能成为巴菲特 · K线跳一跳</title>
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+<style>* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
 html, body {
   width: 100%; min-height: 100%; overflow: hidden;
   background: #0a0e14; color: #e8eef4;
@@ -1262,7 +1261,6 @@ canvas#game { display: block; width: 100%; height: 100%; position: fixed; top: 0
   display: flex; gap: 10px;
 }
 .result-screen .share-row .btn-secondary { flex: 1; }
-
 </style>
 </head>
 <body>
@@ -1554,8 +1552,7 @@ canvas#game { display: block; width: 100%; height: 100%; position: fixed; top: 0
   </div>
 </div>
 
-<script>
-/* StonkRider · v0.4 巴菲特跳K线版
+<script>/* StonkRider · v0.4 巴菲特跳K线版
    核心：巴菲特小人在K线柱顶蓄力跳跃
    - 按住蓄力，松手起跳
    - 蓄力越久跳越远，可越级
@@ -3959,7 +3956,7 @@ const CFG = {
 
   // SURGE
   surgeMaxCells: 5,
-  surgeDurationSec: 3,
+  surgeDurationSec: 5,
 
   // 巴菲特 Q版
   charSize: 38,             // 整体放大一点
@@ -4272,19 +4269,35 @@ function buildTrack(level) {
     // 蜡烛图：玩家踩在实体"顶部" = max(open, close) 对应的 Y
     // 屏幕坐标 Y 越小=屏幕越上=价格越高
     const bodyTopPrice = Math.max(b.o, b.c);
+    // 动态蜡烛：后半段（>50%进度）的蜡烛会上下浮动，增加挑战
+    const floats = progress > 0.5 && i > 3;   // 前3根和前半段不浮动
+    const floatAmp = floats ? (15 + Math.random() * 25) : 0;   // 15-40px 振幅
+    const floatSpeed = floats ? (1.2 + Math.random() * 1.8) : 0;  // 1.2-3.0 rad/s
+    const floatPhase = floats ? (Math.random() * Math.PI * 2) : 0;
+
     pillars.push({
       idx: i,
       centerX: cursorX,
       width: CFG.pillarWidth,
-      topY: priceToTopY(bodyTopPrice),    // 实体顶部 Y（玩家踩这里）
-      // 蜡烛图四要素的 Y 坐标
+      topY: priceToTopY(bodyTopPrice),    // 实体顶部 Y（玩家踩这里，浮动时会实时更新）
+      baseTopY: priceToTopY(bodyTopPrice), // 初始 topY（浮动基准）
+      // 蜡烛图四要素的 Y 坐标（浮动时会同步偏移）
       highY: priceToTopY(b.h),
       lowY: priceToTopY(b.l),
       openY: priceToTopY(b.o),
       closeY: priceToTopY(b.c),
+      baseHighY: priceToTopY(b.h),        // 浮动基准
+      baseLowY: priceToTopY(b.l),
+      baseOpenY: priceToTopY(b.o),
+      baseCloseY: priceToTopY(b.c),
       isUp: b.c >= b.o,
       bar: b,
-      bodyRatio: Math.abs(b.c - b.o) / Math.max(0.01, b.h - b.l)
+      bodyRatio: Math.abs(b.c - b.o) / Math.max(0.01, b.h - b.l),
+      floats,
+      floatAmp,
+      floatSpeed,
+      floatPhase,
+      floatOffset: 0                      // 当前浮动偏移量（px），实时计算
     });
   }
 
@@ -4328,7 +4341,7 @@ function newGame() {
     landBouncePhase: 0,       // 落地小弹跳动画 0..1
     score: 0, combo: 0, maxCombo: 0, perfects: 0,
     confidence: CFG.initConfidence,
-    surgePower: 0, surgeActive: false, surgeRemain: 0,
+    surgePower: 0, surgeActive: false, surgeRemain: 0, surgeAutoTimer: 0,
     flashGold: 0,            // SURGE 触发金色全屏闪
     edgePulse: 0,            // 屏幕边缘金色脉冲（4连击+）
     surgeIntro: 0,           // SURGE 触发瞬间的慢动作 + 巨型字
@@ -4542,10 +4555,14 @@ window.addEventListener('keyup', e => {
 });
 
 function doJump(heldMs) {
+  const charge = Math.max(0, Math.min(1, (heldMs - CFG.chargeMinMs) / (CFG.chargeMaxMs - CFG.chargeMinMs)));
+  doJumpWithCharge(charge);
+}
+function doJumpWithCharge(charge) {
   const c = game.char;
   if (!c.onPillar && !c.onGround) return;
 
-  const charge = Math.max(0, Math.min(1, (heldMs - CFG.chargeMinMs) / (CFG.chargeMaxMs - CFG.chargeMinMs)));
+  charge = Math.max(0, Math.min(1, charge));
   const vy = CFG.minVy + (CFG.maxVy - CFG.minVy) * charge;
   const vx = CFG.minVx + (CFG.maxVx - CFG.minVx) * charge;
 
@@ -4592,6 +4609,28 @@ function update(dt) {
   if (game.surgeActive) {
     game.surgeRemain -= dt;
     if (game.surgeRemain <= 0) endSurge();
+  }
+
+  // ====== 动态蜡烛浮动更新 ======
+  {
+    const elapsed = game.elapsed;
+    for (let i = 0; i < game.track.pillars.length; i++) {
+      const p = game.track.pillars[i];
+      if (!p.floats) continue;
+      const prevOffset = p.floatOffset;
+      p.floatOffset = Math.sin(elapsed * p.floatSpeed + p.floatPhase) * p.floatAmp;
+      const delta = p.floatOffset - prevOffset;
+      // 同步所有 Y 坐标
+      p.topY = p.baseTopY + p.floatOffset;
+      p.highY = p.baseHighY + p.floatOffset;
+      p.lowY = p.baseLowY + p.floatOffset;
+      p.openY = p.baseOpenY + p.floatOffset;
+      p.closeY = p.baseCloseY + p.floatOffset;
+      // 如果角色正站在浮动柱上，跟着一起移动
+      if (game.char.onPillar && game.char.pillarIdx === p.idx) {
+        game.char.y += delta;
+      }
+    }
   }
 
   // ====== 蓄力机制（按住-松开 + 节拍） ======
@@ -4730,7 +4769,7 @@ function update(dt) {
   game.edgePulse = (game.edgePulse || 0) * Math.pow(0.5, dt);
   game.surgeIntro = Math.max(0, (game.surgeIntro || 0) - dt * 1.6);    // 0.6s 退出
 
-  // SURGE 期间持续金币雨
+  // SURGE 期间持续金币雨 + 自动冲刺
   if (game.surgeActive) {
     game.coinRain = 1.0;
     // 每帧概率生成新金币
@@ -4743,6 +4782,20 @@ function update(dt) {
         size: 8 + Math.random() * 10,
         life: 4
       });
+    }
+    // 自动冲刺：站在柱子上不蓄力时，1.2s 自动跳向下一根
+    if (game.char.onPillar && !game.charging && game.landingPauseRemain <= 0) {
+      game.surgeAutoTimer = (game.surgeAutoTimer || 0) + dt;
+      if (game.surgeAutoTimer >= 1.2) {
+        game.surgeAutoTimer = 0;
+        // 自动蓄力并跳跃（用适中的蓄力量跳向下一根）
+        const nextIdx = game.char.pillarIdx + 1;
+        const charge = chargeNeededFor(nextIdx);
+        const autoCharge = charge !== null ? charge : 0.5;
+        doJumpWithCharge(autoCharge);
+      }
+    } else {
+      game.surgeAutoTimer = 0;
     }
   } else {
     game.coinRain *= Math.pow(0.05, dt);
@@ -4760,17 +4813,26 @@ function update(dt) {
 
 function checkLanding() {
   const c = game.char;
+  const prevY = c.y - c.vy * (1/60);    // 近似上一帧 Y
   for (let i = 0; i < game.track.pillars.length; i++) {
     const p = game.track.pillars[i];
     if (c.x < p.centerX - p.width/2) return null;        // 还没到这根
     if (c.x > p.centerX + p.width/2) continue;            // 已过
     // 在水平范围内：检查垂直
-    // 关键修复：只在角色 Y 刚刚跨过柱顶时（在平台厚度内）才判定落地
-    // 防止从空隙下落时，扫过远低于柱顶的柱子被误判
-    if (c.y >= p.topY && c.y <= p.topY + CFG.platformThickness * 0.6) {
+    // 改进碰撞判定——三种情况都算落地：
+    // A. 标准落地：c.y 在柱顶到柱顶+平台厚度*1.2 之间（窗口从16.8px扩到33.6px，减少高速穿透）
+    // B. 擦顶落地：上一帧在柱顶上方8px内，当前帧已到柱顶下方（解决"看起来该站住却掉下去"的bug）
+    // C. 抓边落地：c.y 在柱顶上方8px内（给跳高蜡烛一个容差）
+    const platBot = p.topY + CFG.platformThickness * 1.2;
+    const grabTol = 8;   // 柱顶上方容差
+    const caseA = c.y >= p.topY && c.y <= platBot;
+    const caseB = prevY <= p.topY + grabTol && c.y >= p.topY && c.y <= platBot + 10;
+    const caseC = c.y >= p.topY - grabTol && c.y < p.topY;
+    if (caseA || caseB || caseC) {
       return p;
     }
     // 已经远低于柱顶 = 已穿过空隙，继续下落
+    if (c.y > platBot + 10) return null;
     return null;
   }
   return null;
@@ -4925,6 +4987,14 @@ function addSurgePower(n) {
 function triggerSurge() {
   game.surgeActive = true;
   game.surgeRemain = CFG.surgeDurationSec;
+  // === 实感激励 ===
+  // 1. 信心回满（最实在的奖励——续命）
+  game.confidence = CFG.initConfidence;
+  document.querySelectorAll('.confidence .heart').forEach((h, i) => {
+    h.classList.remove('lost', 'flash');
+  });
+  // 2. 自动冲刺计时器（每 1.2 秒自动跳一根，玩家只需点屏幕控制时机）
+  game.surgeAutoTimer = 0;
   // === 全屏冲击效果 ===
   game.flashGold = 1.0;             // 金色全屏闪
   game.flashRed = 0.3;
@@ -4941,10 +5011,13 @@ function triggerSurge() {
   playSurgeBlast();
   surgeBanner.classList.add('show');
   setTimeout(() => surgeBanner.classList.remove('show'), 2200);
+  // 实感提示
+  showToast('信心回满 · 自动冲刺 5s！', 1800);
 }
 function endSurge() {
   game.surgeActive = false;
   game.surgePower = 0;
+  game.surgeAutoTimer = 0;
   game.flashGreen = 0.5;             // 退出时绿闪一下，提示玩家无敌结束
   if (typeof showToast === 'function') showToast('涨停结束 · 继续冲！', 1200);
 }
@@ -5566,6 +5639,23 @@ function render() {
       ctx.textAlign = 'center';
       ctx.fillText(game.level.currency + p.bar.c.toFixed(2), sx, pTopY - 22);
     }
+
+    // 浮动蜡烛视觉提示：呼吸光晕 + ↕ 箭头
+    if (p.floats) {
+      const breathe = 0.3 + Math.sin(game.elapsed * p.floatSpeed * 2 + p.floatPhase) * 0.2;
+      ctx.save();
+      ctx.strokeStyle = `rgba(168,130,255,${breathe})`;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(sx - p.width/2 - 4, renderBodyTop - 4, p.width + 8, platformH + 8);
+      ctx.setLineDash([]);
+      // ↕ 小箭头在蜡烛右侧
+      ctx.fillStyle = `rgba(168,130,255,${0.5 + breathe * 0.5})`;
+      ctx.font = '10px -apple-system';
+      ctx.textAlign = 'center';
+      ctx.fillText('↕', sx + p.width/2 + 10, renderBodyTop + platformH/2 + 3);
+      ctx.restore();
+    }
   });
 
   // 蓄力时画抛物线预测线（只画前 30%，避免太"作弊"——给玩家方向但不给落点）
@@ -5651,7 +5741,10 @@ function render() {
     ctx.font = `700 ${coin.size}px -apple-system`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('$', 0, 0);
+    ctx.fillText('
+</body>
+</html>
+, 0, 0);
     ctx.restore();
     ctx.globalAlpha = 1;
   });
@@ -5688,7 +5781,10 @@ function render() {
         ctx.fillStyle = '#8b5a06';
         ctx.font = `700 ${d.size}px -apple-system`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('$', 0, 0);
+        ctx.fillText('
+</body>
+</html>
+, 0, 0);
         ctx.restore();
       });
       ctx.globalAlpha = 1;
@@ -5877,13 +5973,22 @@ function drawBuffett(sx, footY) {
     ctx.fill();
   }
 
-  // SURGE 光环
+  // SURGE 光环 + 金色发光
   if (game.surgeActive) {
+    // 双层旋转光环
     ctx.strokeStyle = 'rgba(255,59,48,0.6)';
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.arc(0, -s * 0.95, s * 1.1 + Math.sin(game.elapsed * 20) * 4, 0, Math.PI*2);
     ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,210,76,0.4)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, -s * 0.95, s * 1.3 + Math.cos(game.elapsed * 15) * 3, game.elapsed * 5, game.elapsed * 5 + Math.PI * 1.5);
+    ctx.stroke();
+    // 全身金色阴影
+    ctx.shadowColor = '#ffd24c';
+    ctx.shadowBlur = 20;
   }
 
   // 蓄力光晕
@@ -5930,8 +6035,8 @@ function drawBuffett(sx, footY) {
   ctx.closePath();
   ctx.fill();
 
-  // 红领带（菱形+条状）
-  ctx.fillStyle = '#d8202c';
+  // 红领带（菱形+条状）—— SURGE 期间变金色！
+  ctx.fillStyle = game.surgeActive ? '#ffd24c' : '#d8202c';
   // 上方小菱形（领带结）
   ctx.beginPath();
   ctx.moveTo(0, -s*0.68);
@@ -5991,8 +6096,8 @@ function drawBuffett(sx, footY) {
   ctx.moveTo(s*0.10, -s*1.45); ctx.lineTo(s*0.18, -s*1.42);
   ctx.stroke();
 
-  // 眼镜（金边方圆框，参考图就是金边）
-  ctx.strokeStyle = '#c69334';
+  // 眼镜（金边方圆框，参考图就是金边）—— SURGE 期间镜片发金光
+  ctx.strokeStyle = game.surgeActive ? '#ffd24c' : '#c69334';
   ctx.lineWidth = 2.2;
   // 左镜片（圆角矩形感）
   ctx.beginPath();
@@ -6007,12 +6112,20 @@ function drawBuffett(sx, footY) {
   ctx.moveTo(-s*0.05, -s*1.18);
   ctx.lineTo(s*0.05, -s*1.18);
   ctx.stroke();
-  // 镜片反光（让眼镜有玻璃感）
-  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  // 镜片反光（让眼镜有玻璃感）—— SURGE 期间金色反光
+  ctx.fillStyle = game.surgeActive ? 'rgba(255,210,76,0.45)' : 'rgba(255,255,255,0.25)';
   ctx.beginPath();
   ctx.ellipse(-s*0.21, -s*1.21, s*0.04, s*0.03, -0.4, 0, Math.PI*2);
   ctx.ellipse(s*0.15, -s*1.21, s*0.04, s*0.03, -0.4, 0, Math.PI*2);
   ctx.fill();
+  // SURGE 期间镜片里画 ★ 星眼
+  if (game.surgeActive) {
+    ctx.fillStyle = '#ffd24c';
+    ctx.font = `bold ${Math.round(s*0.16)}px -apple-system`;
+    ctx.textAlign = 'center';
+    ctx.fillText('★', -s*0.18, -s*1.13);
+    ctx.fillText('★', s*0.18, -s*1.13);
+  }
 
   // 眉毛（白色粗眉，挑起来 Q版感）
   ctx.strokeStyle = '#ddd';
@@ -6066,7 +6179,18 @@ function drawBuffett(sx, footY) {
   ctx.strokeStyle = '#3a1a10';
   ctx.lineWidth = 2;
   ctx.lineCap = 'round';
-  if (game.charging && game.chargeAmount > 0.4) {
+  if (game.surgeActive) {
+    // SURGE 爆发：大笑（大弧线 + 牙齿）
+    ctx.beginPath();
+    ctx.arc(0, -s*1.00, s*0.14, 0.1 * Math.PI, 0.9 * Math.PI);
+    ctx.stroke();
+    ctx.fillStyle = '#5a1a10';
+    ctx.beginPath();
+    ctx.arc(0, -s*1.00, s*0.14, 0.1 * Math.PI, 0.9 * Math.PI);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-s*0.08, -s*1.02, s*0.16, s*0.03);
+  } else if (game.charging && game.chargeAmount > 0.4) {
     // 蓄力中：张大嘴笑（O 形开口）
     ctx.fillStyle = '#5a1a10';
     ctx.beginPath();
@@ -6125,7 +6249,10 @@ function drawBuffett(sx, footY) {
     ctx.fillStyle = '#fff';
     ctx.font = `bold ${Math.round(s*0.20)}px -apple-system`;
     ctx.textAlign = 'center';
-    ctx.fillText('$', bagX, bagY + s*0.06);
+    ctx.fillText('
+</body>
+</html>
+, bagX, bagY + s*0.06);
   }
 
   ctx.shadowBlur = 0;
@@ -7038,7 +7165,6 @@ if (typeof roundRect === 'undefined') {
   var lb = document.getElementById('loadingBanner');
   if (lb) lb.style.display = 'none';
 })();
-
 </script>
 </body>
 </html>
