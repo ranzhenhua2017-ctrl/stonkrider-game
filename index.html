@@ -6,7 +6,30 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0a0e14">
+<meta name="format-detection" content="telephone=no,email=no,address=no">
+<meta name="screen-orientation" content="portrait">
+<meta name="x5-orientation" content="portrait">
+<meta name="full-screen" content="yes">
+<meta name="x5-fullscreen" content="true">
+<meta name="x5-page-mode" content="app">
+<meta name="msapplication-tap-highlight" content="no">
+<meta name="renderer" content="webkit">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+<!-- 微信分享卡片信息（朋友圈/群分享时自动抓取） -->
 <title>你也能成为巴菲特 · K线跳一跳</title>
+<meta name="description" content="一款用真实A股/美股K线当跑道的休闲跳跃游戏。看你能在贵州茅台/英伟达的K线上跳多远？信心条爆仓警告 ⚠️">
+<meta name="keywords" content="K线跳一跳,股票游戏,巴菲特,休闲游戏,微信H5">
+<meta property="og:title" content="你也能成为巴菲特 · K线跳一跳">
+<meta property="og:description" content="真·股票K线当跑道，跳偏就深套！来挑战贵州茅台/英伟达，看你的信心条能撑多久。">
+<meta property="og:image" content="share-cover.jpg">
+<meta property="og:type" content="website">
+<meta itemprop="name" content="你也能成为巴菲特">
+<meta itemprop="description" content="真·股票K线当跑道，跳偏就深套。">
+<meta itemprop="image" content="share-cover.jpg">
+
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="favicon.png">
 <style>* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
 html, body {
   width: 100%; min-height: 100%; overflow: hidden;
@@ -1493,7 +1516,7 @@ canvas#game { display: block; width: 100%; height: 100%; position: fixed; top: 0
     <div class="confirm-title">现在退出？</div>
     <div class="confirm-sub">这局还没结算，退出会丢失进度</div>
     <div class="confirm-buttons">
-      <button class="btn-secondary" id="confirmCancelBtn">继续骑行</button>
+      <button class="btn-secondary" id="confirmCancelBtn">继续 Jump</button>
       <button class="btn-danger" id="confirmExitBtn">退出本局</button>
     </div>
   </div>
@@ -4269,11 +4292,12 @@ function buildTrack(level) {
     // 蜡烛图：玩家踩在实体"顶部" = max(open, close) 对应的 Y
     // 屏幕坐标 Y 越小=屏幕越上=价格越高
     const bodyTopPrice = Math.max(b.o, b.c);
-    // 动态蜡烛：后半段（>50%进度）的蜡烛会上下浮动，增加挑战
-    const floats = progress > 0.5 && i > 3;   // 前3根和前半段不浮动
-    const floatAmp = floats ? (15 + Math.random() * 25) : 0;   // 15-40px 振幅
-    const floatSpeed = floats ? (1.2 + Math.random() * 1.8) : 0;  // 1.2-3.0 rad/s
-    const floatPhase = floats ? (Math.random() * Math.PI * 2) : 0;
+    // 动态蜡烛：每 10 根有一根浮动（idx=10/20/30...），节奏感强、可预测
+    // 前 5 根新手保护期不浮动，避免开局就遇到浮动柱
+    const floats = i >= 5 && i % 10 === 0;
+    const floatAmp = floats ? 28 : 0;            // 固定 28px 振幅（比原 15-40 更稳定）
+    const floatSpeed = floats ? 1.6 : 0;         // 固定 1.6 rad/s（约 4 秒一来回）
+    const floatPhase = floats ? (i * 0.7) : 0;   // 用 idx 派生相位，相邻浮动柱不同步
 
     pillars.push({
       idx: i,
@@ -4818,21 +4842,29 @@ function checkLanding() {
     const p = game.track.pillars[i];
     if (c.x < p.centerX - p.width/2) return null;        // 还没到这根
     if (c.x > p.centerX + p.width/2) continue;            // 已过
+
     // 在水平范围内：检查垂直
-    // 改进碰撞判定——三种情况都算落地：
-    // A. 标准落地：c.y 在柱顶到柱顶+平台厚度*1.2 之间（窗口从16.8px扩到33.6px，减少高速穿透）
-    // B. 擦顶落地：上一帧在柱顶上方8px内，当前帧已到柱顶下方（解决"看起来该站住却掉下去"的bug）
-    // C. 抓边落地：c.y 在柱顶上方8px内（给跳高蜡烛一个容差）
+    // === 落地判定（v1.4 加强版）===
+    // 浮动蜡烛会上下移动，原来的窄容差容易"看起来该上去却掉下去"。
+    // 判定原则：只要玩家正在下落（vy > 0）且角色脚底已扫过柱顶平面 → 算落地
     const platBot = p.topY + CFG.platformThickness * 1.2;
-    const grabTol = 8;   // 柱顶上方容差
+    // 浮动柱用更宽的抓顶容差（最大兼顾 40px 振幅 + 跳跃帧间距）
+    const grabTol = p.floats ? 28 : 12;
+
+    // A. 标准落地：脚底站在平台厚度区间内
     const caseA = c.y >= p.topY && c.y <= platBot;
-    const caseB = prevY <= p.topY + grabTol && c.y >= p.topY && c.y <= platBot + 10;
-    const caseC = c.y >= p.topY - grabTol && c.y < p.topY;
-    if (caseA || caseB || caseC) {
+    // B. 擦顶落地：上一帧还在柱顶上方一帧距离内，这帧已到柱顶下方
+    const caseB = prevY <= p.topY + grabTol && c.y >= p.topY - 4 && c.y <= platBot + 12;
+    // C. 抓边落地：脚在柱顶正上方容差内 + 正在下落（视觉上看起来"踩到了边"）
+    const caseC = c.vy >= 0 && c.y >= p.topY - grabTol && c.y < p.topY + 2;
+    // D. 浮动柱救场：柱在向上飘 + 玩家在下落 + 上一帧刚好擦过柱顶上方 → snap 上去
+    const caseD = p.floats && c.vy > 0 && prevY < p.topY && c.y >= p.topY - grabTol;
+
+    if (caseA || caseB || caseC || caseD) {
       return p;
     }
-    // 已经远低于柱顶 = 已穿过空隙，继续下落
-    if (c.y > platBot + 10) return null;
+    // 已经远低于柱顶 = 穿过了空隙，掉下去
+    if (c.y > platBot + 12) return null;
     return null;
   }
   return null;
@@ -4903,12 +4935,14 @@ function handleLandingPillar(p) {
   } else if (judge === 'good') {
     addScore(CFG.pointsGood);
     game.combo = 0;                  // GOOD 不算 combo，但也不破坏（只是不延续）
+    game.surgePower = 0;             // 非 PERFECT 即清零 SURGE 槽（必须连续 5 PERFECT）
     game.confidence = Math.min(3, game.confidence + CFG.confGainGood);
     spawnParticles(10, '#5ddc8c');
     playLandSound();
   } else {
     addScore(CFG.pointsGood / 2);
     game.combo = 0;                  // 边缘落地：combo 清零
+    game.surgePower = 0;             // 非 PERFECT 即清零 SURGE 槽
     spawnParticles(8, '#7a8aa0');
     playLandSound();
   }
@@ -4956,7 +4990,7 @@ function respawnToLastPillar() {
   // 扣信心、清 combo
   game.confidence -= CFG.confLossOnFall;
   game.combo = 0;
-  game.surgePower = Math.max(0, game.surgePower - 1);
+  game.surgePower = 0;             // 失足直接清零 SURGE 槽（必须连续 5 PERFECT）
   game.flashRed = 0.6;
   game.shake = 0.7;
   spawnParticles(20, '#ff5b5b');
@@ -4979,7 +5013,7 @@ function respawnToLastPillar() {
   game.landingPauseRemain = CFG.landingPauseMs / 1000;
 }
 
-function addScore(pts) { game.score += game.surgeActive ? pts * 3 : pts; }   // SURGE 期间分数 ×3
+function addScore(pts) { game.score += game.surgeActive ? pts * 5 : pts; }   // SURGE 期间分数 ×5
 function addSurgePower(n) {
   game.surgePower = Math.min(CFG.surgeMaxCells, game.surgePower + n);
   if (game.surgePower >= CFG.surgeMaxCells && !game.surgeActive) triggerSurge();
@@ -4987,13 +5021,23 @@ function addSurgePower(n) {
 function triggerSurge() {
   game.surgeActive = true;
   game.surgeRemain = CFG.surgeDurationSec;
+  // 埋点：触发涨停爆发（核心高潮事件）
+  if (window.__track) {
+    window.__track('surge_trigger', {
+      score: Math.floor(game.score || 0),
+      pillarsReached: game.char ? game.char.pillarIdx : 0,
+      stock: game.level ? game.level.code : ''
+    });
+  }
   // === 实感激励 ===
   // 1. 信心回满（最实在的奖励——续命）
   game.confidence = CFG.initConfidence;
   document.querySelectorAll('.confidence .heart').forEach((h, i) => {
     h.classList.remove('lost', 'flash');
   });
-  // 2. 自动冲刺计时器（每 1.2 秒自动跳一根，玩家只需点屏幕控制时机）
+  // 2. 涨停红包：触发瞬间直接 +5000 分（不被 ×5 再放大，固定大额奖励）
+  game.score += 5000;
+  // 3. 自动冲刺计时器（每 1.2 秒自动跳一根，玩家只需点屏幕控制时机）
   game.surgeAutoTimer = 0;
   // === 全屏冲击效果 ===
   game.flashGold = 1.0;             // 金色全屏闪
@@ -5012,7 +5056,7 @@ function triggerSurge() {
   surgeBanner.classList.add('show');
   setTimeout(() => surgeBanner.classList.remove('show'), 2200);
   // 实感提示
-  showToast('信心回满 · 自动冲刺 5s！', 1800);
+  showToast('💰 +5000 红包 · 信心回满 · 分数 ×5', 2000);
 }
 function endSurge() {
   game.surgeActive = false;
@@ -5035,12 +5079,12 @@ function showJudge(type, leap = 0) {
     else { label = '✦ PERFECT ✦'; color = '#ffd24c'; }
     judgeLabel.textContent = label;
     judgeLabel.style.color = color;
-    // 阶梯分数：基础 500，combo3 = 750，combo4+ = 1000；SURGE 再 ×3
+    // 阶梯分数：基础 500，combo3 = 750，combo4+ = 1000；SURGE 再 ×5
     const comboMult = cb >= 4 ? 2.0 : cb >= 3 ? 1.5 : 1.0;
-    let pts = Math.floor(CFG.pointsPerfect * comboMult * (game.surgeActive ? 3 : 1));
+    let pts = Math.floor(CFG.pointsPerfect * comboMult * (game.surgeActive ? 5 : 1));
     if (leap >= 2) pts += CFG.pointsLeapBonus * (leap - 1);
     let suffix = '';
-    if (game.surgeActive) suffix += ' ⚡涨停×3';
+    if (game.surgeActive) suffix += ' ⚡涨停×5';
     if (leap >= 2) suffix += ` 越级${leap}!`;
     judgePts.textContent = '+' + pts.toLocaleString() + suffix;
   } else if (type === 'good') {
@@ -5812,7 +5856,7 @@ function render() {
     ctx.fillStyle = '#fff';
     ctx.shadowBlur = 20;
     ctx.font = 'bold 28px -apple-system, "PingFang SC"';
-    ctx.fillText('3 秒无敌 · 分数 ×3 · 自动 PERFECT', 0, 30);
+    ctx.fillText('5 秒无敌 · 分数 ×5 · +5000 红包', 0, 30);
     ctx.restore();
   }
 
@@ -6378,6 +6422,14 @@ $('tutSkipBtn').addEventListener('click', e => {
 
 function startRun() {
   game = newGame();
+  game.__startedAt = Date.now();
+  // 埋点：游戏开始
+  if (window.__track) {
+    window.__track('game_start', {
+      stock: game.level ? game.level.code : '',
+      stockName: game.level ? game.level.name : ''
+    });
+  }
   hudName.textContent = game.level.name;
   hudCode.textContent = game.level.code;
   hud.style.display = 'block';
@@ -6565,6 +6617,18 @@ window.addEventListener('load', () => {
 function endGame(result, msg) {
   if (game.state !== 'playing') return;
   game.state = result;
+  // 埋点：游戏结束（结果、分数、Combo、关卡）
+  if (window.__track) {
+    window.__track('game_end', {
+      result: result,
+      score: Math.floor(game.score || 0),
+      maxCombo: game.maxCombo || 0,
+      perfects: game.perfects || 0,
+      pillarsReached: game.char ? game.char.pillarIdx : 0,
+      stock: game.level ? game.level.code : '',
+      duration: Math.round((Date.now() - (game.__startedAt || Date.now())) / 1000)
+    });
+  }
   hud.style.display = 'none';
   pauseBtn.classList.remove('show'); if(typeof bgmBtn!=='undefined' && bgmBtn) bgmBtn.classList.remove('show');
   tapHint.classList.remove('show');
@@ -7157,5 +7221,111 @@ if (typeof roundRect === 'undefined') {
   if (lb) lb.style.display = 'none';
 })();
 </script>
+
+<!-- ============== 微信 H5 适配层 ============== -->
+
+<!-- 1. 横屏警告（覆盖全屏，引导用户转回竖屏） -->
+<div id="orientationWarn" style="display:none;position:fixed;inset:0;z-index:99999;background:#0a0e14;color:#ffd24c;display:none;flex-direction:column;align-items:center;justify-content:center;font-family:-apple-system,sans-serif;text-align:center;padding:40px;">
+  <div style="font-size:64px;margin-bottom:20px;">📱</div>
+  <div style="font-size:20px;font-weight:700;margin-bottom:12px;">请竖屏游玩</div>
+  <div style="font-size:14px;opacity:0.7;line-height:1.6;">本游戏专为竖屏设计<br>请将手机旋转回竖屏方向</div>
+</div>
+
+<!-- 2. 微信"在浏览器打开"引导（仅微信内 + 用户主动触发后显示） -->
+<div id="wxOpenTip" style="display:none;position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,0.85);align-items:flex-start;justify-content:flex-end;padding:20px;flex-direction:column;font-family:-apple-system,sans-serif;" onclick="this.style.display='none'">
+  <div style="position:absolute;top:12px;right:24px;color:#fff;font-size:60px;line-height:1;">↗</div>
+  <div style="color:#fff;font-size:16px;text-align:right;margin-top:80px;line-height:1.8;">
+    点击右上角 <span style="color:#5ddc8c;">···</span><br>
+    选择"<span style="color:#ffd24c;">在浏览器打开</span>"<br>
+    体验更流畅 ✨
+  </div>
+  <div style="color:rgba(255,255,255,0.5);font-size:12px;margin-top:20px;text-align:right;">点击任意位置关闭</div>
+</div>
+
+<script>
+(function(){
+  // ====== 横竖屏检测 ======
+  function checkOrientation() {
+    var warn = document.getElementById('orientationWarn');
+    if (!warn) return;
+    var isLandscape = window.innerWidth > window.innerHeight;
+    warn.style.display = isLandscape ? 'flex' : 'none';
+  }
+  window.addEventListener('resize', checkOrientation);
+  window.addEventListener('orientationchange', function(){ setTimeout(checkOrientation, 200); });
+  checkOrientation();
+
+  // ====== 微信浏览器检测 + 引导提示 ======
+  var ua = navigator.userAgent.toLowerCase();
+  var isWX = /micromessenger/.test(ua);
+  var isQQ = /qq\//.test(ua);
+  window.__isWX = isWX;
+  window.__isQQ = isQQ;
+
+  // 微信内首次访问 5 秒后展示一次引导（用户可点掉，本会话不再弹）
+  if (isWX && !sessionStorage.getItem('wxTipShown')) {
+    setTimeout(function(){
+      var tip = document.getElementById('wxOpenTip');
+      if (tip) tip.style.display = 'flex';
+      sessionStorage.setItem('wxTipShown', '1');
+    }, 8000);
+  }
+
+  // ====== 禁用微信浏览器双击放大 ======
+  var lastTouch = 0;
+  document.addEventListener('touchend', function(e){
+    var now = Date.now();
+    if (now - lastTouch <= 300) e.preventDefault();
+    lastTouch = now;
+  }, { passive: false });
+
+  // ====== 禁用微信浏览器下拉刷新（避免误触） ======
+  document.addEventListener('touchmove', function(e){
+    if (e.scale && e.scale !== 1) e.preventDefault();
+  }, { passive: false });
+
+  // ====== 简易埋点（无后端版）======
+  // 用 Umami 免费云：注册后填 website-id 即可启用
+  // 临时方案：用 sendBeacon 把关键事件 POST 到一个免费端点
+  // 现在先用 console + localStorage 本地累计，等用户拿到 Umami ID 再换
+  window.__track = function(eventName, data) {
+    try {
+      var payload = {
+        e: eventName,
+        t: Date.now(),
+        ua: ua.substring(0,40),
+        d: data || {}
+      };
+      // 本地累计访问数据
+      var logs = JSON.parse(localStorage.getItem('__playLogs') || '[]');
+      logs.push(payload);
+      if (logs.length > 50) logs.shift();
+      localStorage.setItem('__playLogs', JSON.stringify(logs));
+      console.log('[track]', eventName, data);
+
+      // 如果配置了 Umami，自动上报（用户填 ID 后生效）
+      if (window.umami && window.umami.track) {
+        window.umami.track(eventName, data);
+      }
+    } catch(err) {}
+  };
+
+  // 启动埋点
+  window.__track('page_view', { isWX: isWX, isQQ: isQQ });
+  var __startTime = Date.now();
+  window.addEventListener('pagehide', function(){
+    window.__track('page_exit', { duration: Math.round((Date.now() - __startTime)/1000) });
+  });
+  window.addEventListener('visibilitychange', function(){
+    if (document.hidden) {
+      window.__track('page_hide', { duration: Math.round((Date.now() - __startTime)/1000) });
+    }
+  });
+})();
+</script>
+
+<!-- 3. 埋点：Umami（免费、隐私友好、无 cookie）。注册 https://cloud.umami.is 后把 data-website-id 换成自己的 -->
+<!-- <script defer src="https://cloud.umami.is/script.js" data-website-id="YOUR_WEBSITE_ID"></script> -->
+
 </body>
 </html>
