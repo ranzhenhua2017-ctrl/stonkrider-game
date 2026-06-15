@@ -5741,10 +5741,7 @@ function render() {
     ctx.font = `700 ${coin.size}px -apple-system`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('
-</body>
-</html>
-, 0, 0);
+    ctx.fillText('$', 0, 0);
     ctx.restore();
     ctx.globalAlpha = 1;
   });
@@ -5781,10 +5778,7 @@ function render() {
         ctx.fillStyle = '#8b5a06';
         ctx.font = `700 ${d.size}px -apple-system`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('
-</body>
-</html>
-, 0, 0);
+        ctx.fillText('$', 0, 0);
         ctx.restore();
       });
       ctx.globalAlpha = 1;
@@ -6249,10 +6243,7 @@ function drawBuffett(sx, footY) {
     ctx.fillStyle = '#fff';
     ctx.font = `bold ${Math.round(s*0.20)}px -apple-system`;
     ctx.textAlign = 'center';
-    ctx.fillText('
-</body>
-</html>
-, bagX, bagY + s*0.06);
+    ctx.fillText('$', bagX, bagY + s*0.06);
   }
 
   ctx.shadowBlur = 0;
