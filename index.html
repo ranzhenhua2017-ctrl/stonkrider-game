@@ -1084,6 +1084,75 @@ canvas#game { display: block; width: 100%; height: 100%; position: fixed; top: 0
   letter-spacing: 0.5px;
 }
 
+/* ========== Combo 阶梯式视觉 ========== */
+.combo.show.combo-2 .n {
+  font-size: 48px;
+  color: #ffd24c;
+  text-shadow: 0 0 20px rgba(255,210,76,0.8);
+  animation: comboPop 0.4s cubic-bezier(.34,1.56,.64,1);
+}
+.combo.show.combo-3 .n {
+  font-size: 60px;
+  color: #ff8a35;
+  text-shadow: 0 0 24px rgba(255,138,53,0.9), 0 0 40px rgba(255,210,76,0.5);
+  animation: comboPop 0.5s cubic-bezier(.34,1.8,.64,1);
+}
+.combo.show.combo-3 .x { color: #ff8a35; font-size: 18px; }
+.combo.show.combo-4 .n {
+  font-size: 78px;
+  color: #ff5b5b;
+  text-shadow: 0 0 30px rgba(255,91,91,1), 0 0 60px rgba(255,138,53,0.7), 0 0 100px rgba(255,210,76,0.5);
+  animation: comboShake 0.7s ease-out;
+}
+.combo.show.combo-4 .x {
+  color: #ff5b5b; font-size: 22px;
+  letter-spacing: 3px;
+}
+@keyframes comboPop {
+  0% { transform: scale(0.5); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes comboShake {
+  0% { transform: scale(0.4) rotate(-8deg); opacity: 0; }
+  20% { transform: scale(1.3) rotate(4deg); opacity: 1; }
+  40% { transform: scale(0.95) rotate(-3deg); }
+  60% { transform: scale(1.08) rotate(2deg); }
+  80% { transform: scale(0.98) rotate(-1deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+
+/* SURGE banner 升级（更醒目） */
+.surge-banner {
+  position: fixed; top: 35%; left: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  background: linear-gradient(135deg, #ff5b5b, #ffd24c, #ff8a35);
+  background-size: 200% 200%;
+  animation: surgeBgShift 2s ease infinite;
+  padding: 20px 40px;
+  border-radius: 18px;
+  box-shadow: 0 0 60px rgba(255,138,53,0.8),
+              0 0 120px rgba(255,210,76,0.5),
+              inset 0 2px 4px rgba(255,255,255,0.4);
+  z-index: 12;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.5s cubic-bezier(.34,1.56,.64,1);
+  pointer-events: none;
+}
+.surge-banner.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+.surge-banner .t {
+  font-size: 28px; font-weight: 900; color: #fff;
+  letter-spacing: 4px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+@keyframes surgeBgShift {
+  0%, 100% { background-position: 0% 0%; }
+  50% { background-position: 100% 100%; }
+}
+
 </style>
 </head>
 <body>
@@ -4139,6 +4208,11 @@ function newGame() {
     score: 0, combo: 0, maxCombo: 0, perfects: 0,
     confidence: CFG.initConfidence,
     surgePower: 0, surgeActive: false, surgeRemain: 0,
+    flashGold: 0,            // SURGE 触发金色全屏闪
+    edgePulse: 0,            // 屏幕边缘金色脉冲（4连击+）
+    surgeIntro: 0,           // SURGE 触发瞬间的慢动作 + 巨型字
+    coinRain: 0,             // SURGE 期间金币雨强度
+    coinRainDrops: [],       // 金币雨粒子
     elapsed: 0,
     particles: [],
     coins: [],                    // P2：完美爆炸金币
@@ -4455,13 +4529,31 @@ function update(dt) {
       }
     }
     // 是否掉进虚空（屏幕 Y，相机已跟随）
+    // SURGE 期间免疫失足：直接弹回最近柱顶继续冲
     if ((c.y - game.camY) > H * CFG.fallTriggerY && !c.fallingIntoVoid) {
-      // 启动"无尽下落"判定
-      c.fallingIntoVoid = true;
-      c.voidFallTimer = 0;
-      // 视觉震动+红闪
-      game.flashRed = 0.4;
-      game.shake = 0.5;
+      if (game.surgeActive) {
+        // SURGE 无敌：把玩家送回最近的下一根柱子顶部
+        const nextIdx = Math.min(c.pillarIdx + 1, game.track.pillars.length - 1);
+        const np = game.track.pillars[nextIdx];
+        c.x = np.centerX; c.y = np.topY;
+        c.vx = 0; c.vy = 0;
+        c.onPillar = true; c.pillarIdx = np.idx;
+        c.fallingIntoVoid = false; c.voidFallTimer = 0;
+        if (!game.visitedTopPillars[np.idx]) {
+          game.visitedTopPillars[np.idx] = true;
+          addScore(CFG.pointsPerfect);    // 自动 PERFECT 分
+          spawnCoinBurst(c.x, c.y);
+          spawnParticles(30, '#ffd24c');
+        }
+        game.flashGold = 0.6;
+        game.shake = 0.3;
+      } else {
+        // 启动"无尽下落"判定
+        c.fallingIntoVoid = true;
+        c.voidFallTimer = 0;
+        game.flashRed = 0.4;
+        game.shake = 0.5;
+      }
     }
     if (c.fallingIntoVoid) {
       c.voidFallTimer = (c.voidFallTimer || 0) + dt;
@@ -4507,6 +4599,36 @@ function update(dt) {
   game.shake *= Math.pow(0.001, dt);
   game.flashRed *= Math.pow(0.05, dt);
   game.flashGreen *= Math.pow(0.05, dt);
+  game.flashGold = (game.flashGold || 0) * Math.pow(0.02, dt);
+  game.edgePulse = (game.edgePulse || 0) * Math.pow(0.5, dt);
+  game.surgeIntro = Math.max(0, (game.surgeIntro || 0) - dt * 1.6);    // 0.6s 退出
+
+  // SURGE 期间持续金币雨
+  if (game.surgeActive) {
+    game.coinRain = 1.0;
+    // 每帧概率生成新金币
+    if (Math.random() < dt * 25) {
+      game.coinRainDrops.push({
+        x: Math.random() * W,
+        y: -20 - Math.random() * 60,
+        vy: 200 + Math.random() * 200,
+        rot: 0, vrot: (Math.random() - 0.5) * 8,
+        size: 8 + Math.random() * 10,
+        life: 4
+      });
+    }
+  } else {
+    game.coinRain *= Math.pow(0.05, dt);
+  }
+  // 更新已存在金币雨
+  if (game.coinRainDrops && game.coinRainDrops.length) {
+    game.coinRainDrops = game.coinRainDrops.filter(d => {
+      d.y += d.vy * dt;
+      d.rot += d.vrot * dt;
+      d.life -= dt;
+      return d.y < H + 30 && d.life > 0;
+    });
+  }
 }
 
 function checkLanding() {
@@ -4569,17 +4691,26 @@ function handleLandingPillar(p) {
   showJudge(judge, leap);
 
   if (judge === 'perfect') {
-    addScore(CFG.pointsPerfect);
     game.combo++;                    // 只有 PERFECT 累 combo
     game.perfects++;
+    // 阶梯式分数：基础 500 → ×1 / ×1 / ×1.5 / ×2 / ×3（SURGE 触发后由 addScore 再 ×3）
+    const comboMult = game.combo >= 4 ? 2.0 : game.combo >= 3 ? 1.5 : 1.0;
+    addScore(Math.floor(CFG.pointsPerfect * comboMult));
     game.confidence = Math.min(100, game.confidence + CFG.confGainPerfect);
     addSurgePower(1);
-    spawnParticles(20, '#ffd24c');
-    spawnCoinBurst(c.x, c.y);          // P2：金币爆炸
-    playPerfectSound();
-    game.flashGreen = 0.4;
-    game.zoomPunch = 1;                  // P2：屏幕缩放冲击
-    game.shake = 0.2;
+    // 阶梯式视觉反馈（粒子数 + 颜色 + 屏幕震动随 combo 升级）
+    const particles = 20 + Math.min(40, game.combo * 8);
+    const color = game.combo >= 4 ? '#ff5b5b' : game.combo >= 3 ? '#ff8a35' : '#ffd24c';
+    spawnParticles(particles, color);
+    spawnCoinBurst(c.x, c.y);
+    playPerfectSound(game.combo);     // 传 combo 让音调升高
+    game.flashGreen = Math.min(0.8, 0.4 + game.combo * 0.08);
+    game.zoomPunch = Math.min(1.5, 1 + game.combo * 0.1);
+    game.shake = Math.min(0.5, 0.2 + game.combo * 0.05);
+    // Combo 边缘脉冲（4 连击+）
+    if (game.combo >= 4) {
+      game.edgePulse = 1.0;
+    }
   } else if (judge === 'good') {
     addScore(CFG.pointsGood);
     game.combo = 0;                  // GOOD 不算 combo，但也不破坏（只是不延续）
@@ -4644,7 +4775,7 @@ function respawnToLastPillar() {
   game.landingPauseRemain = CFG.landingPauseMs / 1000;
 }
 
-function addScore(pts) { game.score += game.surgeActive ? pts * 2 : pts; }
+function addScore(pts) { game.score += game.surgeActive ? pts * 3 : pts; }   // SURGE 期间分数 ×3
 function addSurgePower(n) {
   game.surgePower = Math.min(CFG.surgeMaxCells, game.surgePower + n);
   if (game.surgePower >= CFG.surgeMaxCells && !game.surgeActive) triggerSurge();
@@ -4652,21 +4783,51 @@ function addSurgePower(n) {
 function triggerSurge() {
   game.surgeActive = true;
   game.surgeRemain = CFG.surgeDurationSec;
-  game.flashRed = 0.6;
+  // === 全屏冲击效果 ===
+  game.flashGold = 1.0;             // 金色全屏闪
+  game.flashRed = 0.3;
+  game.shake = 0.8;                  // 强震屏
+  game.zoomPunch = 1.5;
+  game.edgePulse = 1.0;
+  game.surgeIntro = 1.0;             // 慢动作 + 巨大字（0.6s 缓出）
+  game.coinRain = 1.0;               // 金币雨触发
+  // 金光爆炸粒子
+  spawnParticles(80, '#ffd24c');
+  spawnParticles(40, '#ff8a35');
+  spawnCoinBurst(game.char.x, game.char.y);
+  // 重型音效：和弦 + 鼓点
+  playSurgeBlast();
   surgeBanner.classList.add('show');
-  setTimeout(() => surgeBanner.classList.remove('show'), 1500);
+  setTimeout(() => surgeBanner.classList.remove('show'), 2200);
 }
-function endSurge() { game.surgeActive = false; game.surgePower = 0; }
+function endSurge() {
+  game.surgeActive = false;
+  game.surgePower = 0;
+  game.flashGreen = 0.5;             // 退出时绿闪一下，提示玩家无敌结束
+  if (typeof showToast === 'function') showToast('涨停结束 · 继续冲！', 1200);
+}
 
 function showJudge(type, leap = 0) {
   judgeEl.classList.remove('show', 'fade');
   void judgeEl.offsetWidth;
   if (type === 'perfect') {
-    judgeLabel.textContent = '✦ PERFECT ✦';
-    judgeLabel.style.color = '#ffd24c';
-    let pts = game.surgeActive ? 1000 : 500;
+    // 标签随 combo 升级
+    const cb = game.combo || 1;
+    let label, color;
+    if (cb >= 5) { label = '🔥 涨停爆发 🔥'; color = '#ff5b5b'; }
+    else if (cb >= 4) { label = '★ MEGA PERFECT ★'; color = '#ff5b5b'; }
+    else if (cb >= 3) { label = '✦ SUPER PERFECT ✦'; color = '#ff8a35'; }
+    else { label = '✦ PERFECT ✦'; color = '#ffd24c'; }
+    judgeLabel.textContent = label;
+    judgeLabel.style.color = color;
+    // 阶梯分数：基础 500，combo3 = 750，combo4+ = 1000；SURGE 再 ×3
+    const comboMult = cb >= 4 ? 2.0 : cb >= 3 ? 1.5 : 1.0;
+    let pts = Math.floor(CFG.pointsPerfect * comboMult * (game.surgeActive ? 3 : 1));
     if (leap >= 2) pts += CFG.pointsLeapBonus * (leap - 1);
-    judgePts.textContent = '+' + pts + (leap >= 2 ? ` 越级${leap}!` : '');
+    let suffix = '';
+    if (game.surgeActive) suffix += ' ⚡涨停×3';
+    if (leap >= 2) suffix += ` 越级${leap}!`;
+    judgePts.textContent = '+' + pts.toLocaleString() + suffix;
   } else if (type === 'good') {
     judgeLabel.textContent = leap >= 2 ? `GOOD 越级${leap}!` : 'GOOD';
     judgeLabel.style.color = '#5ddc8c';
@@ -4693,6 +4854,11 @@ function showJudge(type, leap = 0) {
 function flashCombo() {
   if (game.combo < 2) return;
   comboNum.textContent = '×' + game.combo;
+  // 根据 combo 数加不同 class（CSS 控制颜色 + 大小）
+  comboEl.classList.remove('combo-2', 'combo-3', 'combo-4');
+  if (game.combo >= 4) comboEl.classList.add('combo-4');
+  else if (game.combo >= 3) comboEl.classList.add('combo-3');
+  else comboEl.classList.add('combo-2');
   comboEl.classList.add('show');
   clearTimeout(flashCombo._t);
   flashCombo._t = setTimeout(() => comboEl.classList.remove('show'), 1400);
@@ -4751,22 +4917,79 @@ function playJumpSound(charge) {
   osc.start(t); osc.stop(t + 0.22);
 }
 
-// 完美落地音（明亮的双音）
-function playPerfectSound() {
+// 完美落地音（combo 越高音越尖锐高亢）
+function playPerfectSound(combo) {
   const ac = getAudio();
   if (!ac) return;
   const t = ac.currentTime;
-  [880, 1320].forEach((freq, i) => {
+  combo = combo || 1;
+  // combo 1 = 880Hz/1320Hz；每多 1 combo 升半音（×1.06）
+  const baseUp = Math.min(1.5, Math.pow(1.06, Math.min(combo - 1, 8)));
+  const freqs = [880 * baseUp, 1320 * baseUp];
+  if (combo >= 3) freqs.push(1760 * baseUp);     // combo 3+ 加高八度
+  freqs.forEach((freq, i) => {
     const osc = ac.createOscillator();
     const gain = ac.createGain();
-    osc.frequency.setValueAtTime(freq, t + i * 0.05);
+    osc.frequency.setValueAtTime(freq, t + i * 0.04);
     osc.type = 'sine';
-    gain.gain.setValueAtTime(0, t + i * 0.05);
-    gain.gain.linearRampToValueAtTime(0.15, t + i * 0.05 + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.05 + 0.25);
+    gain.gain.setValueAtTime(0, t + i * 0.04);
+    gain.gain.linearRampToValueAtTime(0.15, t + i * 0.04 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.04 + 0.30);
     osc.connect(gain); gain.connect(ac.destination);
-    osc.start(t + i * 0.05); osc.stop(t + i * 0.05 + 0.27);
+    osc.start(t + i * 0.04); osc.stop(t + i * 0.04 + 0.32);
   });
+  // combo 4+ 加金币声
+  if (combo >= 4) {
+    const buf = ac.createBuffer(1, ac.sampleRate * 0.06, ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / d.length * 4);
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    const g = ac.createGain();
+    g.gain.value = 0.15;
+    src.connect(g); g.connect(ac.destination);
+    src.start(t + 0.05);
+  }
+}
+
+// SURGE 触发：大和弦 + 鼓点炸
+function playSurgeBlast() {
+  const ac = getAudio();
+  if (!ac) return;
+  const t = ac.currentTime;
+  // 三和弦（C 大调主和弦 上行八度）
+  [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.frequency.setValueAtTime(freq, t + i * 0.025);
+    osc.type = i < 4 ? 'sawtooth' : 'sine';
+    gain.gain.setValueAtTime(0, t + i * 0.025);
+    gain.gain.linearRampToValueAtTime(0.10, t + i * 0.025 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.025 + 0.6);
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.start(t + i * 0.025); osc.stop(t + i * 0.025 + 0.65);
+  });
+  // 鼓点：低频 kick
+  const kick = ac.createOscillator();
+  const kg = ac.createGain();
+  kick.type = 'sine';
+  kick.frequency.setValueAtTime(120, t);
+  kick.frequency.exponentialRampToValueAtTime(30, t + 0.20);
+  kg.gain.setValueAtTime(0.0001, t);
+  kg.gain.linearRampToValueAtTime(0.6, t + 0.005);
+  kg.gain.exponentialRampToValueAtTime(0.001, t + 0.30);
+  kick.connect(kg); kg.connect(ac.destination);
+  kick.start(t); kick.stop(t + 0.32);
+  // 镲：白噪声
+  const buf = ac.createBuffer(1, ac.sampleRate * 0.5, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / d.length * 3);
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const g = ac.createGain();
+  g.gain.value = 0.18;
+  src.connect(g); g.connect(ac.destination);
+  src.start(t);
 }
 
 // 落地普通音
@@ -5242,6 +5465,19 @@ function render() {
   }
 
   // ====== 画巴菲特小人 ======
+  // SURGE 期间：巴菲特金光光晕
+  if (game.surgeActive) {
+    const ay = game.char.y - camY;
+    const pulse = 1 + Math.sin(game.elapsed * 8) * 0.15;
+    const aurora = ctx.createRadialGradient(charScreenX, ay - CFG.charSize * 0.4, 0, charScreenX, ay - CFG.charSize * 0.4, CFG.charSize * 1.4 * pulse);
+    aurora.addColorStop(0, 'rgba(255,210,76,0.55)');
+    aurora.addColorStop(0.5, 'rgba(255,138,53,0.25)');
+    aurora.addColorStop(1, 'rgba(255,138,53,0)');
+    ctx.fillStyle = aurora;
+    ctx.beginPath();
+    ctx.arc(charScreenX, ay - CFG.charSize * 0.4, CFG.charSize * 1.4 * pulse, 0, Math.PI*2);
+    ctx.fill();
+  }
   drawBuffett(charScreenX, game.char.y - camY);
 
   // 粒子
@@ -5281,6 +5517,72 @@ function render() {
   // 全屏闪
   if (game.flashRed > 0.01) { ctx.fillStyle = `rgba(255,59,48,${game.flashRed*0.3})`; ctx.fillRect(0, 0, W, H); }
   if (game.flashGreen > 0.01) { ctx.fillStyle = `rgba(93,220,140,${game.flashGreen*0.2})`; ctx.fillRect(0, 0, W, H); }
+  // SURGE 触发金色全屏闪
+  if (game.flashGold > 0.01) { ctx.fillStyle = `rgba(255,210,76,${game.flashGold*0.45})`; ctx.fillRect(0, 0, W, H); }
+
+  // === SURGE 期间持续视觉 ===
+  if (game.surgeActive || game.coinRain > 0.01) {
+    // 屏幕边缘金色脉冲
+    const pulseAlpha = 0.4 + 0.3 * Math.sin(game.elapsed * 6);
+    const grad = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.3, W/2, H/2, Math.max(W,H)*0.7);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(0.6, 'rgba(255,138,53,0)');
+    grad.addColorStop(1, `rgba(255,138,53,${pulseAlpha * (game.surgeActive ? 0.5 : 0.2)})`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+    // 金币雨
+    if (game.coinRainDrops && game.coinRainDrops.length) {
+      game.coinRainDrops.forEach(d => {
+        ctx.save();
+        ctx.translate(d.x, d.y);
+        ctx.rotate(d.rot);
+        ctx.globalAlpha = Math.min(1, d.life * 1.5);
+        const cg = ctx.createRadialGradient(0, 0, 0, 0, 0, d.size);
+        cg.addColorStop(0, '#fff5b8');
+        cg.addColorStop(0.5, '#ffd24c');
+        cg.addColorStop(1, '#c89316');
+        ctx.fillStyle = cg;
+        ctx.beginPath(); ctx.arc(0, 0, d.size, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#8b5a06';
+        ctx.font = `700 ${d.size}px -apple-system`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('$', 0, 0);
+        ctx.restore();
+      });
+      ctx.globalAlpha = 1;
+    }
+  }
+  // 屏幕边缘金色脉冲（4 连击+ 但未 SURGE 时）
+  if (game.edgePulse > 0.01 && !game.surgeActive) {
+    const w = 8 + game.edgePulse * 12;
+    ctx.strokeStyle = `rgba(255,210,76,${game.edgePulse * 0.7})`;
+    ctx.lineWidth = w;
+    ctx.shadowBlur = 30 * game.edgePulse;
+    ctx.shadowColor = '#ffd24c';
+    ctx.strokeRect(w/2, w/2, W - w, H - w);
+    ctx.shadowBlur = 0;
+  }
+  // SURGE 触发瞬间巨型字（0.6 秒动画）
+  if (game.surgeIntro > 0.01) {
+    const t = 1 - game.surgeIntro;
+    const scale = 0.4 + t * 0.7;
+    const alpha = game.surgeIntro;
+    ctx.save();
+    ctx.translate(W/2, H/2);
+    ctx.scale(scale, scale);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#ffd24c';
+    ctx.shadowColor = '#ff8a35';
+    ctx.shadowBlur = 30;
+    ctx.font = 'bold 90px -apple-system, "PingFang SC"';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('涨 停 爆 发', 0, -30);
+    ctx.fillStyle = '#fff';
+    ctx.shadowBlur = 20;
+    ctx.font = 'bold 28px -apple-system, "PingFang SC"';
+    ctx.fillText('3 秒无敌 · 分数 ×3 · 自动 PERFECT', 0, 30);
+    ctx.restore();
+  }
 
   // 当前股价显示
   const cur = game.track.pillars[game.char.pillarIdx];
