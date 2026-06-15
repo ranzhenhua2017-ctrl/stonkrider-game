@@ -1304,8 +1304,8 @@ canvas#game { display: block; width: 100%; height: 100%; position: fixed; top: 0
       <div class="stock-code" id="hudCode">--</div>
     </div>
     <div class="score-box">
-      <div class="score-num" id="hudScore">0</div>
-      <div class="score-label">SCORE</div>
+      <div class="score-num" id="hudScore">¥0</div>
+      <div class="score-label">收益</div>
     </div>
   </div>
   <div class="confidence" id="confFill">
@@ -1548,7 +1548,7 @@ canvas#game { display: block; width: 100%; height: 100%; position: fixed; top: 0
     <div class="revive-title" id="reviveTitle">差点掉进深套！</div>
     <div class="revive-sub" id="reviveSub">看一段广告，<span class="revive-hl">原地复活</span>，不扣信心<br><span class="revive-remain">本局还剩 3 次复活机会</span></div>
     <div class="revive-stats">
-      <div class="rv-cell"><div class="v" id="reviveScore">0</div><div class="l">当前分数</div></div>
+      <div class="rv-cell"><div class="v" id="reviveScore">¥0</div><div class="l">当前收益</div></div>
       <div class="rv-cell"><div class="v" id="reviveProgress">0/0</div><div class="l">已跳进度</div></div>
     </div>
     <button class="revive-btn-primary" id="reviveAdBtn">
@@ -3972,10 +3972,11 @@ const CFG = {
   // 复活
   maxRevives: 3,              // 每局最多看广告复活次数
 
-  // 评分
-  pointsPerfect: 500,
-  pointsGood: 100,
-  pointsLeapBonus: 200,
+  // 评分（v1.5 金融收益制：基础分=蜡烛最高价，系数随跳跃表现浮动）
+  scorePerfectMult: 1.0,     // PERFECT 系数：精准抄底，全额收益
+  scoreGoodMult: 0.3,         // GOOD 系数：追高入场，30% 收益
+  scoreEdgeMult: 0.1,         // EDGE 系数：勉强上车，10% 收益
+  surgeFlatBonus: 5000,       // 涨停红包（固定额，不受 ×5 放大）
 
   // SURGE
   surgeMaxCells: 5,
@@ -3986,9 +3987,9 @@ const CFG = {
 };
 
 const GHOSTS = [
-  { name: "WSB大神",   score: 18000, color: "#ffd24c" },
-  { name: "普通散户",   score: 9000,  color: "#7a8aa0" },
-  { name: "割肉党",     score: 3500,  color: "#ff8a8a" }
+  { name: "WSB大神",   mult: 45, color: "#ffd24c" },    // score ≈ close × 45（完赛+多连击）
+  { name: "普通散户",   mult: 22, color: "#7a8aa0" },    // score ≈ close × 22
+  { name: "割肉党",     mult: 8,  color: "#ff8a8a" }     // score ≈ close × 8（半途爆仓）
 ];
 
 // ============ DOM ============
@@ -4731,7 +4732,7 @@ function update(dt) {
         c.fallingIntoVoid = false; c.voidFallTimer = 0;
         if (!game.visitedTopPillars[np.idx]) {
           game.visitedTopPillars[np.idx] = true;
-          addScore(CFG.pointsPerfect);    // 自动 PERFECT 分
+          addScore(np.bar.h * CFG.scorePerfectMult);    // 自动 PERFECT：全额最高价收益
           spawnCoinBurst(c.x, c.y);
           spawnParticles(30, '#ffd24c');
         }
@@ -4909,14 +4910,24 @@ function handleLandingPillar(p) {
     return;
   }
 
-  showJudge(judge, leap);
+  showJudge(judge, leap, p);
 
   if (judge === 'perfect') {
     game.combo++;                    // 只有 PERFECT 累 combo
     game.perfects++;
-    // 阶梯式分数：基础 500 → ×1 / ×1 / ×1.5 / ×2 / ×3（SURGE 触发后由 addScore 再 ×3）
-    const comboMult = game.combo >= 4 ? 2.0 : game.combo >= 3 ? 1.5 : 1.0;
-    addScore(Math.floor(CFG.pointsPerfect * comboMult));
+    // === 金融收益制 v1.5 ===
+    // 基础收益 = 蜡烛最高价（bar.h），代表"抄底该日最高价"
+    // 连击加成：combo≥3 → ×1.5，combo≥5 → ×2.0，combo≥8 → ×3.0
+    const comboMult = game.combo >= 8 ? 3.0 : game.combo >= 5 ? 2.0 : game.combo >= 3 ? 1.5 : 1.0;
+    const baseProfit = p.bar.h * CFG.scorePerfectMult * comboMult;
+    // 越级奖励：跳过 N-1 根蜡烛，每根额外拿 close 价（"跨日持仓收益"）
+    let leapProfit = 0;
+    if (leap >= 2) {
+      for (let li = fromIdx + 1; li < p.idx; li++) {
+        leapProfit += game.track.pillars[li].bar.c * 0.5;
+      }
+    }
+    addScore(baseProfit + leapProfit);
     game.confidence = Math.min(3, game.confidence + CFG.confGainPerfect);
     addSurgePower(1);
     // 阶梯式视觉反馈（粒子数 + 颜色 + 屏幕震动随 combo 升级）
@@ -4933,23 +4944,28 @@ function handleLandingPillar(p) {
       game.edgePulse = 1.0;
     }
   } else if (judge === 'good') {
-    addScore(CFG.pointsGood);
+    // GOOD：追高入场，仅 30% 收益
+    const baseProfit = p.bar.h * CFG.scoreGoodMult;
+    let leapProfit = 0;
+    if (leap >= 2) {
+      for (let li = fromIdx + 1; li < p.idx; li++) {
+        leapProfit += game.track.pillars[li].bar.c * 0.2;
+      }
+    }
+    addScore(baseProfit + leapProfit);
     game.combo = 0;                  // GOOD 不算 combo，但也不破坏（只是不延续）
     game.surgePower = 0;             // 非 PERFECT 即清零 SURGE 槽（必须连续 5 PERFECT）
     game.confidence = Math.min(3, game.confidence + CFG.confGainGood);
     spawnParticles(10, '#5ddc8c');
     playLandSound();
   } else {
-    addScore(CFG.pointsGood / 2);
+    // EDGE：勉强上车，仅 10% 收益
+    const baseProfit = p.bar.h * CFG.scoreEdgeMult;
+    addScore(baseProfit);
     game.combo = 0;                  // 边缘落地：combo 清零
     game.surgePower = 0;             // 非 PERFECT 即清零 SURGE 槽
     spawnParticles(8, '#7a8aa0');
     playLandSound();
-  }
-
-  // 越级奖励
-  if (leap >= 2) {
-    addScore(CFG.pointsLeapBonus * (leap - 1));
   }
 
   if (game.combo > game.maxCombo) game.maxCombo = game.combo;
@@ -5013,7 +5029,7 @@ function respawnToLastPillar() {
   game.landingPauseRemain = CFG.landingPauseMs / 1000;
 }
 
-function addScore(pts) { game.score += game.surgeActive ? pts * 5 : pts; }   // SURGE 期间分数 ×5
+function addScore(pts) { game.score += game.surgeActive ? pts * 5 : pts; }   // SURGE 期间收益 ×5
 function addSurgePower(n) {
   game.surgePower = Math.min(CFG.surgeMaxCells, game.surgePower + n);
   if (game.surgePower >= CFG.surgeMaxCells && !game.surgeActive) triggerSurge();
@@ -5036,7 +5052,7 @@ function triggerSurge() {
     h.classList.remove('lost', 'flash');
   });
   // 2. 涨停红包：触发瞬间直接 +5000 分（不被 ×5 再放大，固定大额奖励）
-  game.score += 5000;
+  game.score += CFG.surgeFlatBonus;
   // 3. 自动冲刺计时器（每 1.2 秒自动跳一根，玩家只需点屏幕控制时机）
   game.surgeAutoTimer = 0;
   // === 全屏冲击效果 ===
@@ -5056,7 +5072,7 @@ function triggerSurge() {
   surgeBanner.classList.add('show');
   setTimeout(() => surgeBanner.classList.remove('show'), 2200);
   // 实感提示
-  showToast('💰 +5000 红包 · 信心回满 · 分数 ×5', 2000);
+  showToast('💰 涨停红包 +¥5000 · 信心回满 · 收益 ×5', 2000);
 }
 function endSurge() {
   game.surgeActive = false;
@@ -5066,9 +5082,10 @@ function endSurge() {
   if (typeof showToast === 'function') showToast('涨停结束 · 继续冲！', 1200);
 }
 
-function showJudge(type, leap = 0) {
+function showJudge(type, leap = 0, pillar = null) {
   judgeEl.classList.remove('show', 'fade');
   void judgeEl.offsetWidth;
+  const cur = game.level.currency;   // ¥ 或 US$
   if (type === 'perfect') {
     // 标签随 combo 升级
     const cb = game.combo || 1;
@@ -5079,24 +5096,39 @@ function showJudge(type, leap = 0) {
     else { label = '✦ PERFECT ✦'; color = '#ffd24c'; }
     judgeLabel.textContent = label;
     judgeLabel.style.color = color;
-    // 阶梯分数：基础 500，combo3 = 750，combo4+ = 1000；SURGE 再 ×5
-    const comboMult = cb >= 4 ? 2.0 : cb >= 3 ? 1.5 : 1.0;
-    let pts = Math.floor(CFG.pointsPerfect * comboMult * (game.surgeActive ? 5 : 1));
-    if (leap >= 2) pts += CFG.pointsLeapBonus * (leap - 1);
+    // 金融收益制：基础 = 蜡烛最高价 × PERFECT系数 × 连击倍率，SURGE 再 ×5
+    const comboMult = cb >= 8 ? 3.0 : cb >= 5 ? 2.0 : cb >= 3 ? 1.5 : 1.0;
+    const baseProfit = pillar ? pillar.bar.h : 0;
+    let pts = Math.floor(baseProfit * CFG.scorePerfectMult * comboMult * (game.surgeActive ? 5 : 1));
+    // 越级收益
+    if (leap >= 2 && pillar) {
+      const fromIdx = pillar.idx - leap;
+      for (let li = fromIdx + 1; li < pillar.idx; li++) {
+        pts += Math.floor(game.track.pillars[li].bar.c * 0.5 * (game.surgeActive ? 5 : 1));
+      }
+    }
     let suffix = '';
     if (game.surgeActive) suffix += ' ⚡涨停×5';
-    if (leap >= 2) suffix += ` 越级${leap}!`;
-    judgePts.textContent = '+' + pts.toLocaleString() + suffix;
+    if (leap >= 2) suffix += ` 跨${leap}日!`;
+    judgePts.textContent = '+' + cur + pts.toLocaleString() + suffix;
   } else if (type === 'good') {
-    judgeLabel.textContent = leap >= 2 ? `GOOD 越级${leap}!` : 'GOOD';
+    judgeLabel.textContent = leap >= 2 ? `GOOD 跨${leap}日!` : 'GOOD';
     judgeLabel.style.color = '#5ddc8c';
-    let pts = game.surgeActive ? 200 : 100;
-    if (leap >= 2) pts += CFG.pointsLeapBonus * (leap - 1);
-    judgePts.textContent = '+' + pts;
+    const baseProfit = pillar ? pillar.bar.h : 0;
+    let pts = Math.floor(baseProfit * CFG.scoreGoodMult * (game.surgeActive ? 5 : 1));
+    if (leap >= 2 && pillar) {
+      const fromIdx = pillar.idx - leap;
+      for (let li = fromIdx + 1; li < pillar.idx; li++) {
+        pts += Math.floor(game.track.pillars[li].bar.c * 0.2 * (game.surgeActive ? 5 : 1));
+      }
+    }
+    judgePts.textContent = '+' + cur + pts.toLocaleString();
   } else if (type === 'edge') {
     judgeLabel.textContent = '边缘…';
     judgeLabel.style.color = '#7a8aa0';
-    judgePts.textContent = '+50';
+    const baseProfit = pillar ? pillar.bar.h : 0;
+    const pts = Math.floor(baseProfit * CFG.scoreEdgeMult * (game.surgeActive ? 5 : 1));
+    judgePts.textContent = '+' + cur + pts.toLocaleString();
   } else if (type === 'fell') {
     judgeLabel.textContent = '💔 被套了';
     judgeLabel.style.color = '#ff5b5b';
@@ -5856,7 +5888,7 @@ function render() {
     ctx.fillStyle = '#fff';
     ctx.shadowBlur = 20;
     ctx.font = 'bold 28px -apple-system, "PingFang SC"';
-    ctx.fillText('5 秒无敌 · 分数 ×5 · +5000 红包', 0, 30);
+    ctx.fillText('5 秒无敌 · 收益 ×5 · +¥5000 红包', 0, 30);
     ctx.restore();
   }
 
@@ -6334,7 +6366,7 @@ function roundRect(ctx, x, y, w, h, r) {
 
 // ============ HUD ============
 function updateHUD() {
-  hudScore.textContent = Math.floor(game.score).toLocaleString();
+  hudScore.textContent = game.level.currency + Math.floor(game.score).toLocaleString();
   // 信心 3 段离散：3=满血 / 0=GAME OVER
   const confCount = Math.max(0, Math.min(3, Math.floor(game.confidence)));
   document.querySelectorAll('.confidence .heart').forEach((h, i) => {
@@ -6370,7 +6402,7 @@ const TUTORIAL_STEPS = [
   {
     emoji: '👴',
     title: '欢迎来到 K线跳一跳',
-    text: '巴菲特要从一根 K 线柱跳到下一根<br>跳得准，分数高，连续 PERFECT 还能触发涨停爆发',
+    text: '巴菲特要从一根 K 线柱跳到下一根<br>跳得准，收益高，连续 PERFECT 还能触发涨停爆发',
   },
   {
     emoji: '👆',
@@ -6484,7 +6516,7 @@ function tryShowReviveDialog() {
   stopBGM();
 
   // 填充弹窗数据：分数 / 进度 / 剩余复活次数
-  $('reviveScore').textContent = Math.floor(game.score).toLocaleString();
+  $('reviveScore').textContent = game.level.currency + Math.floor(game.score).toLocaleString();
   $('reviveProgress').textContent = (game.char.pillarIdx) + '/' + game.track.pillars.length;
   // 剩余次数提示
   const remainCount = CFG.maxRevives - (game.reviveCount || 0);
@@ -6635,7 +6667,7 @@ function endGame(result, msg) {
   chargeBar.classList.add('hidden-bar');
   trappedOverlay.classList.add('hidden');
 
-  if (result === 'win') game.score += game.confidence * 2000;   // 每剩 1 格 +2000 完赛奖励
+  if (result === 'win') game.score += game.confidence * game.track.pillars[0].bar.c * 10;   // 每剩 1 格信心 = 收盘价×10 完赛红包
 
   resultScreen.classList.toggle('lose', result === 'lose');
 
@@ -6656,30 +6688,30 @@ function endGame(result, msg) {
   $('bcStockName').textContent = game.level.name;
   $('bcStockCode').textContent = game.level.code;
 
-  // 3. 模拟收益率（基于 score 反推）
-  // 设计：完赛+爆分 ≈ +200%，亏麻 ≈ -80%
-  // 公式：本金 10000，最终资产 = 10000 + score（上限 +200%）/ 信心耗尽 = 10000 - (1-completion)*8000
+  // 3. 投资收益率（v1.5 金融收益制：score 直接就是收益金额）
+  // 本金 = 第一根蜡烛 close × 100 股（1 手），收益金额 = score
+  const firstBar = game.track.pillars[0].bar;
+  const capital = firstBar.c * 100;   // 本金 = 收盘价 × 100 股
   let returnAmount, returnPct;
   if (isWin) {
-    returnAmount = score;
-    returnPct = (score / 10000) * 100;
+    returnAmount = Math.floor(score);
+    returnPct = capital > 0 ? (returnAmount / capital) * 100 : 0;
   } else {
-    // 亏损：根据完成度
-    // 完成 0% → -80%，完成 50% → -30%，完成 80% → -5%
-    const lossPct = -(1 - completion) * 80;
-    returnPct = lossPct + (score / 10000) * 30;   // score 拉一点
-    returnAmount = Math.floor(10000 * returnPct / 100);
+    // 亏损：根据完成度 + 实际收益
+    returnAmount = Math.floor(score);
+    returnPct = capital > 0 ? (returnAmount / capital) * 100 : -(1 - completion) * 80;
   }
+  const cur = game.level.currency;   // ¥ 或 US$
   const returnBlock = $('bcReturnBlock');
   returnBlock.classList.remove('profit', 'loss');
   if (returnPct >= 0) {
     returnBlock.classList.add('profit');
     $('bcReturnPct').textContent = '+' + returnPct.toFixed(1) + '%';
-    $('bcReturnAmount').textContent = '+' + returnAmount.toLocaleString();
+    $('bcReturnAmount').textContent = '+' + cur + returnAmount.toLocaleString();
   } else {
     returnBlock.classList.add('loss');
     $('bcReturnPct').textContent = returnPct.toFixed(1) + '%';
-    $('bcReturnAmount').textContent = returnAmount.toLocaleString();
+    $('bcReturnAmount').textContent = cur + returnAmount.toLocaleString();
   }
 
   // 4. 净值曲线
@@ -6690,20 +6722,20 @@ function endGame(result, msg) {
   $('bcCombo').textContent = '×' + game.maxCombo;
   $('bcPerfect').textContent = game.perfects;
   // 击败玩家百分比（基于 score 与三个 ghost 的比较 + 一些随机扰动）
-  const ghostScores = GHOSTS.map(g => g.score);
+  const ghostScores = GHOSTS.map(g => g.mult * game.track.pillars[0].bar.c);
   const beats = ghostScores.filter(gs => score > gs).length;
   let beatRank;
-  if (isWin) beatRank = 80 + Math.min(19, Math.floor(score / 1000));
+  if (isWin) beatRank = 80 + Math.min(19, Math.floor(returnPct / 3));
   else beatRank = Math.floor(beats / GHOSTS.length * 50) + Math.floor(completion * 30);
   beatRank = Math.max(2, Math.min(99, beatRank));
   $('bcRank').textContent = beatRank + '%';
 
-  // 6. 评级标签
+  // 6. 评级标签（v1.5 基于收益率）
   let badgeEmoji, badgeText;
   if (isWin) {
-    if (score >= 18000) { badgeEmoji = '🏆'; badgeText = '股神级别 · 巴菲特本菲'; }
-    else if (score >= 12000) { badgeEmoji = '💰'; badgeText = '价值大师 · 长期持有'; }
-    else if (score >= 6000) { badgeEmoji = '😎'; badgeText = '韭菜逆袭 · 抄底成功'; }
+    if (returnPct >= 50) { badgeEmoji = '🏆'; badgeText = '股神级别 · 巴菲特本菲'; }
+    else if (returnPct >= 20) { badgeEmoji = '💰'; badgeText = '价值大师 · 长期持有'; }
+    else if (returnPct >= 5) { badgeEmoji = '😎'; badgeText = '韭菜逆袭 · 抄底成功'; }
     else { badgeEmoji = '🎉'; badgeText = '勉强保本 · 落袋为安'; }
   } else {
     if (completion < 0.20) { badgeEmoji = '😭'; badgeText = '亏麻了 · 散户A组'; }
@@ -6942,10 +6974,11 @@ if (copyTextBtn) {
     const score = Math.floor(game.score);
     const pct = $('bcReturnPct').textContent;
     const badge = $('bcBadgeText').textContent;
+    const cur = game.level.currency;
     const url = 'https://ranzhenhua2017-ctrl.github.io/stonkrider-game/';
     const text = `📈 我玩《你也能成为巴菲特》今日战绩\n\n` +
                  `${game.level.name} (${game.level.code}) · 收益率 ${pct}\n` +
-                 `分数 ${score.toLocaleString()} · 最高连击 ×${game.maxCombo} · 完美 ${game.perfects} 次\n` +
+                 `收益 ${cur}${score.toLocaleString()} · 最高连击 ×${game.maxCombo} · 完美 ${game.perfects} 次\n` +
                  `评级：${badge}\n\n` +
                  `🎮 一起玩 K 线跳一跳：${url}`;
     if (navigator.clipboard) {
