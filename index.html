@@ -1153,6 +1153,116 @@ canvas#game { display: block; width: 100%; height: 100%; position: fixed; top: 0
   50% { background-position: 100% 100%; }
 }
 
+/* ========== 信心 = 3 颗心形（v1.3）========== */
+.confidence {
+  margin-top: 10px;
+  display: flex; align-items: center; gap: 6px;
+  background: none; height: auto; box-shadow: none; overflow: visible;
+}
+.confidence .heart {
+  font-size: 22px; line-height: 1;
+  color: #ff5b5b;
+  text-shadow: 0 0 8px rgba(255,91,91,0.6);
+  transition: transform 0.3s, color 0.3s, text-shadow 0.3s, opacity 0.3s;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4));
+}
+.confidence .heart.lost {
+  color: rgba(255,91,91,0.18);
+  text-shadow: none;
+  transform: scale(0.85);
+}
+.confidence .heart.flash {
+  animation: heartLose 0.5s ease-out;
+}
+@keyframes heartLose {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.6); color: #fff; text-shadow: 0 0 24px rgba(255,255,255,0.9); }
+  100% { transform: scale(0.85); color: rgba(255,91,91,0.18); text-shadow: none; }
+}
+.conf-label {
+  font-size: 9px; color: #8b95a3;
+  letter-spacing: 1.5px;
+  margin-left: 4px;
+}
+
+/* ========== 排行榜（结算卡） ========== */
+.bc-leaderboard {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 12px;
+  border: 1px solid rgba(255,210,76,0.12);
+}
+.lb-empty {
+  text-align: center; color: #8b95a3; font-size: 12px;
+  padding: 12px 0;
+}
+.lb-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed rgba(255,255,255,0.08);
+}
+.lb-title {
+  font-size: 12px; font-weight: 700;
+  color: #ffd24c; letter-spacing: 0.5px;
+}
+.lb-myrank {
+  font-size: 11px; font-weight: 700;
+  color: #5ddc8c;
+  background: rgba(93,220,140,0.12);
+  padding: 2px 8px; border-radius: 8px;
+}
+.lb-myrank.lb-out {
+  color: #ff8a35;
+  background: rgba(255,138,53,0.12);
+}
+.lb-list {
+  display: flex; flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.lb-row {
+  display: grid;
+  grid-template-columns: 36px 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 6px;
+  font-size: 11px;
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+  color: #b8c2d0;
+}
+.lb-row.lb-me {
+  background: linear-gradient(90deg, rgba(255,210,76,0.18), rgba(255,210,76,0.04));
+  border: 1px solid rgba(255,210,76,0.35);
+  color: #ffd24c;
+  font-weight: 700;
+  box-shadow: 0 0 12px rgba(255,210,76,0.15);
+}
+.lb-rank {
+  font-size: 13px; text-align: center;
+  font-weight: 700;
+}
+.lb-score {
+  font-size: 13px; font-weight: 700;
+  color: #e8eef4;
+}
+.lb-row.lb-me .lb-score { color: #ffd24c; }
+.lb-meta {
+  font-size: 10px; color: #8b95a3;
+}
+.lb-date {
+  font-size: 10px; color: rgba(139,149,163,0.6);
+}
+
+/* 分享按钮一行 */
+.result-screen .share-row {
+  display: flex; gap: 10px;
+}
+.result-screen .share-row .btn-secondary { flex: 1; }
+
 </style>
 </head>
 <body>
@@ -1177,7 +1287,12 @@ canvas#game { display: block; width: 100%; height: 100%; position: fixed; top: 0
       <div class="score-label">SCORE</div>
     </div>
   </div>
-  <div class="confidence"><div class="conf-fill" id="confFill"></div></div>
+  <div class="confidence" id="confFill">
+    <div class="heart" data-i="0">♥</div>
+    <div class="heart" data-i="1">♥</div>
+    <div class="heart" data-i="2">♥</div>
+    <div class="conf-label">机会</div>
+  </div>
   <div class="power-row">
     <div class="power-cell"></div><div class="power-cell"></div><div class="power-cell"></div>
     <div class="power-cell"></div><div class="power-cell"></div>
@@ -1351,6 +1466,9 @@ canvas#game { display: block; width: 100%; height: 100%; position: fixed; top: 0
         <span class="bc-badge-text" id="bcBadgeText">亏麻了 · 散户A股选手</span>
       </div>
 
+      <!-- 本股票排行榜 TOP 10 -->
+      <div class="bc-leaderboard" id="bcLeaderboard"></div>
+
       <!-- 底部签名 -->
       <div class="bc-footer">
         <div class="bc-quote" id="bcQuote">"市场短期是投票机，长期是称重机。"</div>
@@ -1361,7 +1479,10 @@ canvas#game { display: block; width: 100%; height: 100%; position: fixed; top: 0
     <!-- 操作按钮（不在卡片内，避免分享时也截到按钮） -->
     <div class="result-buttons">
       <button class="btn-primary" id="retryBtn">再来一局</button>
-      <button class="btn-secondary" id="shareBtn">📷 保存分享图</button>
+      <div class="share-row">
+        <button class="btn-secondary" id="shareBtn">📷 保存分享图</button>
+        <button class="btn-secondary" id="copyTextBtn">🔗 复制战绩文案</button>
+      </div>
       <button class="btn-secondary" id="backBtn">换一只股</button>
     </div>
   </div>
@@ -3806,7 +3927,7 @@ const CFG = {
   landingPauseMs: 480,      // 落地后强制停顿 0.48s，期间无法再蓄力
 
   // 落点判定
-  perfectRange: 14,
+  perfectRange: 8,
 
   // 屏幕映射（柱顶高度区间）—— 玩家始终保持在屏幕中央
   topMargin: 0.30,          // 最高股价对应世界坐标从顶往下 30%
@@ -3822,11 +3943,11 @@ const CFG = {
   fallTriggerY: 1.05,       // 摩托/小人 Y 坐标超过屏幕高度 ×1.05 = 触发"掉进虚空"
   fallRespawnDelay: 0.8,    // 掉下去 0.8s 后弹回上一柱顶
 
-  // 信心
-  initConfidence: 100,
-  confLossOnFall: 18,
-  confGainPerfect: 6,
-  confGainGood: 3,
+  // 信心（3 段离散生命：3 次失误就 GAME OVER）
+  initConfidence: 3,
+  confLossOnFall: 1,
+  confGainPerfect: 0,        // PERFECT 不加信心（信心是失误次数计数器）
+  confGainGood: 0,
 
   // 复活
   maxRevives: 3,              // 每局最多看广告复活次数
@@ -4267,6 +4388,9 @@ function chargeNeededFor(targetIdx) {
   if (!target) return null;
   const dx = target.centerX - c.x;
   if (dx <= 0) return null;
+  // 找一个使水平距离 dx 时刚好飞过去（落地高度足够低 = 能踩到柱顶 OR 比柱顶低不超过半柱厚）
+  // 不严格要求 PERFECT 高度匹配，让"够得着"的柱都标记出来
+  const platformH = CFG.platformThickness;
   for (let i = 0; i <= 30; i++) {
     const charge = i / 30;
     const vx = CFG.minVx + (CFG.maxVx - CFG.minVx) * charge;
@@ -4274,7 +4398,10 @@ function chargeNeededFor(targetIdx) {
     const t = dx / vx;
     if (t < 0.1 || t > 2) continue;
     const landY = c.y - vy * t + 0.5 * CFG.gravity * t * t;
-    if (Math.abs(landY - target.topY) < 8) return charge;
+    // 容差扩大：从 ±8 改为 -platformH ~ +platformH 之间都算"够得着"
+    if (landY >= target.topY - 4 && landY <= target.topY + platformH) {
+      return charge;
+    }
   }
   return null;
 }
@@ -4569,7 +4696,7 @@ function update(dt) {
   }
 
   // 完赛
-  if (c.x >= game.track.totalDist) endGame('win', '收盘走完30日');
+  // 完赛判定已移到 handleLandingPillar：踩到最后一根柱子立即胜利
   // 信心崩塌：直接 GAME OVER（复活机制已在掉坑时触发过）
   if (game.confidence <= 0) {
     endGame('lose', '信心崩塌，今日亏麻了');
@@ -4696,7 +4823,7 @@ function handleLandingPillar(p) {
     // 阶梯式分数：基础 500 → ×1 / ×1 / ×1.5 / ×2 / ×3（SURGE 触发后由 addScore 再 ×3）
     const comboMult = game.combo >= 4 ? 2.0 : game.combo >= 3 ? 1.5 : 1.0;
     addScore(Math.floor(CFG.pointsPerfect * comboMult));
-    game.confidence = Math.min(100, game.confidence + CFG.confGainPerfect);
+    game.confidence = Math.min(3, game.confidence + CFG.confGainPerfect);
     addSurgePower(1);
     // 阶梯式视觉反馈（粒子数 + 颜色 + 屏幕震动随 combo 升级）
     const particles = 20 + Math.min(40, game.combo * 8);
@@ -4714,7 +4841,7 @@ function handleLandingPillar(p) {
   } else if (judge === 'good') {
     addScore(CFG.pointsGood);
     game.combo = 0;                  // GOOD 不算 combo，但也不破坏（只是不延续）
-    game.confidence = Math.min(100, game.confidence + CFG.confGainGood);
+    game.confidence = Math.min(3, game.confidence + CFG.confGainGood);
     spawnParticles(10, '#5ddc8c');
     playLandSound();
   } else {
@@ -4731,6 +4858,13 @@ function handleLandingPillar(p) {
 
   if (game.combo > game.maxCombo) game.maxCombo = game.combo;
   flashCombo();
+
+  // 踩到最后一根柱子 = 完赛
+  if (p.idx >= game.track.pillars.length - 1) {
+    setTimeout(() => {
+      if (game && game.state === 'playing') endGame('win', '收盘走完全程');
+    }, 500);
+  }
 }
 
 function handleLandingGround() {
@@ -4765,6 +4899,14 @@ function respawnToLastPillar() {
   game.shake = 0.7;
   spawnParticles(20, '#ff5b5b');
   playFallSound();
+  // 触发心形抖动动画（即将失去的那颗）
+  setTimeout(() => {
+    const heart = document.querySelector(`.confidence .heart[data-i="${game.confidence}"]`);
+    if (heart) {
+      heart.classList.add('flash');
+      setTimeout(() => heart.classList.remove('flash'), 500);
+    }
+  }, 50);
   // 信心还有则正常弹"深套"提示；扣到 0 就让 update 直接弹复活弹窗
   if (game.confidence > 0) {
     showTrappedOverlay(CFG.confLossOnFall);
@@ -6031,9 +6173,11 @@ function roundRect(ctx, x, y, w, h, r) {
 // ============ HUD ============
 function updateHUD() {
   hudScore.textContent = Math.floor(game.score).toLocaleString();
-  const c = Math.max(0, game.confidence);
-  confFill.style.width = c + '%';
-  confFill.className = 'conf-fill' + (c < 25 ? ' danger' : c < 50 ? ' warn' : '');
+  // 信心 3 段离散：3=满血 / 0=GAME OVER
+  const confCount = Math.max(0, Math.min(3, Math.floor(game.confidence)));
+  document.querySelectorAll('.confidence .heart').forEach((h, i) => {
+    h.classList.toggle('lost', i >= confCount);
+  });
   powerCells.forEach((el, i) => el.classList.toggle('on', i < game.surgePower));
   progressFill.style.width = Math.min(100, (game.char.pillarIdx / game.track.pillars.length * 100)) + '%';
 
@@ -6309,7 +6453,7 @@ function endGame(result, msg) {
   chargeBar.classList.add('hidden-bar');
   trappedOverlay.classList.add('hidden');
 
-  if (result === 'win') game.score += Math.floor(game.confidence * 20);
+  if (result === 'win') game.score += game.confidence * 2000;   // 每剩 1 格 +2000 完赛奖励
 
   resultScreen.classList.toggle('lose', result === 'lose');
 
@@ -6409,8 +6553,62 @@ function endGame(result, msg) {
     localStorage.setItem(bestKey, score);
   }
 
+  // === 排行榜：保存本局成绩，渲染 TOP 10 ===
+  const lbKey = 'lb_' + game.level.code + '_' + (game.level.timeframe || 'day');
+  const lb = JSON.parse(localStorage.getItem(lbKey) || '[]');
+  const myEntry = {
+    score: score,
+    combo: game.maxCombo,
+    perfects: game.perfects,
+    progress: reachedIdx + 1,
+    total: totalPillars,
+    date: $('bcDate').textContent,
+    timestamp: Date.now(),
+    me: true,
+  };
+  lb.push(myEntry);
+  lb.sort((a, b) => b.score - a.score);
+  // 计算我在 TOP 10 中的排名（1 起）
+  const myRank = lb.findIndex(e => e.timestamp === myEntry.timestamp) + 1;
+  // 只保留 TOP 10
+  const top10 = lb.slice(0, 10).map(e => ({ ...e, me: undefined }));   // 持久化时清掉 me 标记
+  // 但要把当前一局标记 me 在持久化集合里
+  const persistList = top10.map(e => e.timestamp === myEntry.timestamp ? { ...e, me: true } : e);
+  localStorage.setItem(lbKey, JSON.stringify(persistList));
+
+  // 渲染 TOP 10 列表（结算页）
+  renderLeaderboard(persistList, myRank, lb.length);
+
   stopBGM();
   setTimeout(() => resultScreen.classList.remove('hidden'), 400);
+}
+
+function renderLeaderboard(top10, myRank, totalCount) {
+  const lbEl = $('bcLeaderboard');
+  if (!lbEl) return;
+  if (top10.length === 0) {
+    lbEl.innerHTML = '<div class="lb-empty">本榜单暂无记录</div>';
+    return;
+  }
+  const rows = top10.map((e, i) => {
+    const rank = i + 1;
+    const isMe = e.me === true || (typeof e.me === 'undefined' ? false : e.me);
+    const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : ('#' + rank);
+    return `<div class="lb-row${isMe ? ' lb-me' : ''}">
+      <span class="lb-rank">${medal}</span>
+      <span class="lb-score">${e.score.toLocaleString()}</span>
+      <span class="lb-meta">×${e.combo} · ${e.progress}/${e.total}</span>
+      <span class="lb-date">${e.date.slice(5)}</span>
+    </div>`;
+  }).join('');
+  // 当前局信息
+  let header = `<div class="lb-header"><span class="lb-title">📊 本股票 TOP 10</span>`;
+  if (myRank <= 10) {
+    header += `<span class="lb-myrank">你 #${myRank}</span></div>`;
+  } else {
+    header += `<span class="lb-myrank lb-out">你 #${myRank}/${totalCount}</span></div>`;
+  }
+  lbEl.innerHTML = header + '<div class="lb-list">' + rows + '</div>';
 }
 
 // 绘制结算卡片里的迷你净值曲线
@@ -6552,6 +6750,43 @@ confirmOverlay.addEventListener('click', e => {
   if (e.target === confirmOverlay) closeConfirm();
 });
 shareBtn.addEventListener('click', e => { e.stopPropagation(); generateShareCard(); });
+
+// 复制战绩文案
+const copyTextBtn = document.getElementById('copyTextBtn');
+if (copyTextBtn) {
+  copyTextBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (!game) return;
+    const score = Math.floor(game.score);
+    const pct = $('bcReturnPct').textContent;
+    const badge = $('bcBadgeText').textContent;
+    const url = 'https://ranzhenhua2017-ctrl.github.io/stonkrider-game/';
+    const text = `📈 我玩《你也能成为巴菲特》今日战绩\n\n` +
+                 `${game.level.name} (${game.level.code}) · 收益率 ${pct}\n` +
+                 `分数 ${score.toLocaleString()} · 最高连击 ×${game.maxCombo} · 完美 ${game.perfects} 次\n` +
+                 `评级：${badge}\n\n` +
+                 `🎮 一起玩 K 线跳一跳：${url}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('✅ 战绩文案已复制，去微信粘贴吧', 2000);
+      }).catch(() => {
+        fallbackCopy(text);
+      });
+    } else {
+      fallbackCopy(text);
+    }
+  });
+}
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); showToast('✅ 战绩文案已复制', 2000); }
+  catch(e) { showToast('复制失败，请手动选中保存图', 2000); }
+  document.body.removeChild(ta);
+}
 pauseBtn.addEventListener('click', e => {
   e.stopPropagation();
   if (!game) return;
