@@ -1072,6 +1072,18 @@ canvas#game { display: block; width: 100%; height: 100%; position: fixed; top: 0
   margin-top: 6px;
 }
 
+/* 剩余复活次数提示 */
+.revive-remain {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: rgba(255,210,76,0.85);
+  background: rgba(255,210,76,0.08);
+  padding: 3px 10px;
+  border-radius: 8px;
+  letter-spacing: 0.5px;
+}
+
 </style>
 </head>
 <body>
@@ -1322,8 +1334,8 @@ canvas#game { display: block; width: 100%; height: 100%; position: fixed; top: 0
       <div class="revive-emoji">👴</div>
       <div class="revive-glow"></div>
     </div>
-    <div class="revive-title">差一点就上岸了</div>
-    <div class="revive-sub">看一段广告，<span class="revive-hl">满血复活</span><br>继续把这一波 K 线跳完</div>
+    <div class="revive-title" id="reviveTitle">差点掉进深套！</div>
+    <div class="revive-sub" id="reviveSub">看一段广告，<span class="revive-hl">原地复活</span>，不扣信心<br><span class="revive-remain">本局还剩 3 次复活机会</span></div>
     <div class="revive-stats">
       <div class="rv-cell"><div class="v" id="reviveScore">0</div><div class="l">当前分数</div></div>
       <div class="rv-cell"><div class="v" id="reviveProgress">0/0</div><div class="l">已跳进度</div></div>
@@ -1331,9 +1343,9 @@ canvas#game { display: block; width: 100%; height: 100%; position: fixed; top: 0
     <button class="revive-btn-primary" id="reviveAdBtn">
       <span class="rb-ico">▶</span>
       <span class="rb-txt">看广告复活</span>
-      <span class="rb-tag">+100 信心</span>
+      <span class="rb-tag">不扣信心</span>
     </button>
-    <button class="revive-btn-skip" id="reviveSkipBtn">不了，看战绩</button>
+    <button class="revive-btn-skip" id="reviveSkipBtn">不了，扣 18 信心继续</button>
     <div class="revive-countdown" id="reviveCountdown">8s 后自动放弃</div>
   </div>
 </div>
@@ -3747,6 +3759,9 @@ const CFG = {
   confGainPerfect: 6,
   confGainGood: 3,
 
+  // 复活
+  maxRevives: 3,              // 每局最多看广告复活次数
+
   // 评分
   pointsPerfect: 500,
   pointsGood: 100,
@@ -4140,7 +4155,7 @@ function newGame() {
     visitedTopPillars: { 0: true }, // 玩家踏过的柱顶 idx
     needRecover: false,        // 在平底，需要爬回柱顶
     camY: initialCamY,          // 相机 Y 偏移（让玩家保持屏幕中央）
-    reviveUsed: false,          // 是否已使用过本局唯一一次复活
+    reviveCount: 0,             // 本局已用复活次数
     reviveDialogOpen: false,    // 复活弹窗是否打开（避免重复触发）
   };
 }
@@ -4451,21 +4466,21 @@ function update(dt) {
     if (c.fallingIntoVoid) {
       c.voidFallTimer = (c.voidFallTimer || 0) + dt;
       if (c.voidFallTimer >= CFG.fallRespawnDelay) {
-        // 复活到上一柱顶
-        respawnToLastPillar();
+        // 失足后：先尝试弹"看广告复活"弹窗（每局有限次），用户拒绝再走扣信心流程
+        if (canShowRevive()) {
+          tryShowReviveDialog();
+        } else {
+          respawnToLastPillar();
+        }
       }
     }
   }
 
   // 完赛
   if (c.x >= game.track.totalDist) endGame('win', '收盘走完30日');
-  // 信心崩塌：第一次先弹"看广告复活"，拒绝才真 GAME OVER
+  // 信心崩塌：直接 GAME OVER（复活机制已在掉坑时触发过）
   if (game.confidence <= 0) {
-    if (!game.reviveUsed && !game.reviveDialogOpen) {
-      tryShowReviveDialog();
-    } else {
-      endGame('lose', '信心崩塌，今日亏麻了');
-    }
+    endGame('lose', '信心崩塌，今日亏麻了');
   }
 
   // 粒子
@@ -5832,28 +5847,49 @@ function showTrappedOverlay(confLoss) {
 
 // ============ 看广告复活 ============
 let reviveCountdownTimer = null;
+
+// 是否还能弹复活弹窗（剩余次数 > 0）
+function canShowRevive() {
+  if (!game) return false;
+  if (game.reviveDialogOpen) return false;
+  return (game.reviveCount || 0) < CFG.maxRevives;
+}
+
 function tryShowReviveDialog() {
   if (!game) return;
-  if (game.reviveUsed) return;          // 每局仅一次
   if (game.reviveDialogOpen) return;
+  if ((game.reviveCount || 0) >= CFG.maxRevives) {
+    // 用完次数 → 直接走老流程：扣信心 + 弹回上柱
+    respawnToLastPillar();
+    return;
+  }
   game.reviveDialogOpen = true;
   game.state = 'revive_pending';        // 暂停游戏循环
   stopBGM();
 
-  // 填充弹窗数据
+  // 填充弹窗数据：分数 / 进度 / 剩余复活次数
   $('reviveScore').textContent = Math.floor(game.score).toLocaleString();
   $('reviveProgress').textContent = (game.char.pillarIdx) + '/' + game.track.pillars.length;
+  // 剩余次数提示
+  const remainCount = CFG.maxRevives - (game.reviveCount || 0);
+  const reviveTitle = $('reviveTitle');
+  const reviveSub = $('reviveSub');
+  if (reviveTitle) reviveTitle.textContent = '差点掉进深套！';
+  if (reviveSub) {
+    reviveSub.innerHTML = '看一段广告，<span class="revive-hl">原地复活</span>，不扣信心<br>' +
+      '<span class="revive-remain">本局还剩 ' + remainCount + ' 次复活机会</span>';
+  }
 
   $('reviveOverlay').classList.remove('hidden');
   trappedOverlay.classList.add('hidden');
 
-  // 8 秒倒计时自动放弃
+  // 8 秒倒计时自动放弃 → 走老流程（扣信心+弹回上柱）
   let remain = 8;
-  $('reviveCountdown').textContent = remain + 's 后自动放弃';
+  $('reviveCountdown').textContent = remain + 's 后扣 18 信心继续';
   if (reviveCountdownTimer) clearInterval(reviveCountdownTimer);
   reviveCountdownTimer = setInterval(() => {
     remain--;
-    $('reviveCountdown').textContent = remain + 's 后自动放弃';
+    $('reviveCountdown').textContent = remain + 's 后扣 18 信心继续';
     if (remain <= 0) {
       clearInterval(reviveCountdownTimer);
       reviveCountdownTimer = null;
@@ -5869,13 +5905,16 @@ function closeReviveCountdown() {
   }
 }
 
+// 跳过广告：走老逻辑（扣 18 信心 + 弹回上一柱）；若信心扣完则真 GAME OVER
 function declineRevive() {
   closeReviveCountdown();
   $('reviveOverlay').classList.add('hidden');
   if (!game) return;
   game.reviveDialogOpen = false;
-  game.state = 'playing';   // 临时改回，让 endGame 能执行
-  endGame('lose', '信心崩塌，今日亏麻了');
+  game.state = 'playing';
+  // 走原本的失足处理流程
+  respawnToLastPillar();
+  // 若刚好扣到 0 → 下一帧 update 会触发 GAME OVER
 }
 
 function startWatchAd() {
@@ -5886,7 +5925,7 @@ function startWatchAd() {
   const total = 5;          // 5 秒模拟广告
   let elapsed = 0;
   const fill = $('adBarFill');
-  const skip = $('adSkipBtn');
+  let skip = $('adSkipBtn');
   skip.classList.remove('ready');
   fill.style.width = '0%';
   skip.textContent = total + 's';
@@ -5897,38 +5936,39 @@ function startWatchAd() {
     const pct = Math.min(1, elapsed / total);
     fill.style.width = (pct * 100) + '%';
     const remain = Math.max(0, Math.ceil(total - elapsed));
+    skip = $('adSkipBtn');
     if (pct < 1) {
       skip.textContent = remain + 's';
     } else {
       skip.textContent = '点击关闭 ✓';
       skip.classList.add('ready');
       clearInterval(adTimer);
-      // 用户必须点击关闭才完成（模拟真实广告）
     }
   }, 100);
 
   // 让 adSkipBtn 在 ready 时点击 = 完成复活
   const skipHandler = (e) => {
     e.stopPropagation();
-    if (!skip.classList.contains('ready')) return;
-    skip.removeEventListener('click', skipHandler);
+    const cur = $('adSkipBtn');
+    if (!cur.classList.contains('ready')) return;
+    cur.removeEventListener('click', skipHandler);
     finishRevive();
   };
-  // 移除旧监听再绑（避免重复）
+  // 重置监听器
   skip.replaceWith(skip.cloneNode(true));
   const newSkip = $('adSkipBtn');
   newSkip.addEventListener('click', skipHandler);
 }
 
+// 看完广告：原地复活（不扣信心、保持当前位置）
 function finishRevive() {
   $('adOverlay').classList.add('hidden');
   if (!game) return;
-  game.reviveUsed = true;
+  game.reviveCount = (game.reviveCount || 0) + 1;
   game.reviveDialogOpen = false;
-  // 满血复活
-  game.confidence = CFG.initConfidence;
+  // 不扣信心，但 combo 清零（毕竟刚刚跳偏了）
   game.combo = 0;
-  // 弹回最后一个站稳的柱子
+  // 弹回最后一个站稳的柱子（不扣信心）
   const c = game.char;
   let backIdx = c.pillarIdx;
   while (backIdx > 0 && !game.visitedTopPillars[backIdx]) backIdx--;
@@ -5942,14 +5982,14 @@ function finishRevive() {
   // 视觉反馈
   game.flashGreen = 0.6;
   game.shake = 0.3;
+  game.landingPauseRemain = CFG.landingPauseMs / 1000;  // 给一点恢复时间
   spawnParticles(40, '#ffd24c');
-  showToast('💪 满血复活！再战 K 线！', 1800);
+  showToast('💪 复活成功！信心未扣！', 1800);
   game.state = 'playing';
   startBGM();
   playPerfectSound();
 }
 
-document.addEventListener('DOMContentLoaded', () => {});
 // 弹窗按钮事件（在 DOM 加载后绑）
 window.addEventListener('load', () => {
   const adBtn = $('reviveAdBtn');
