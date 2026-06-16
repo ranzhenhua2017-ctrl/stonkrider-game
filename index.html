@@ -4825,6 +4825,17 @@ function update(dt) {
   } else {
     game.coinRain *= Math.pow(0.05, dt);
   }
+
+  // === BGM 动态状态同步（v1.6 灵性 BGM）===
+  if (bgmState.master) {
+    // combo 升 key：0→C, 3→D(+2), 5→E(+4), 8+→G(+7)
+    const cb = game.combo || 0;
+    bgmState.keyShift = cb >= 8 ? 7 : cb >= 5 ? 4 : cb >= 3 ? 2 : 0;
+    // SURGE BPM 加速
+    bgmState.surgeBPM = !!game.surgeActive;
+    // sadMode 衰减（失足时设 1.5 秒小调倒计时）
+    if (bgmState.sadMode > 0) bgmState.sadMode = Math.max(0, bgmState.sadMode - dt);
+  }
   // 更新已存在金币雨
   if (game.coinRainDrops && game.coinRainDrops.length) {
     game.coinRainDrops = game.coinRainDrops.filter(d => {
@@ -4987,6 +4998,8 @@ function handleLandingGround() {
 // 失足后弹回最后一个站稳的柱顶
 function respawnToLastPillar() {
   const c = game.char;
+  // BGM 灵性：失足触发 1.5 秒小调模式（旋律降 ♭3，营造"被套"的忧郁感）
+  bgmState.sadMode = 1.5;
   // 找最后一个已踩过的柱子（visitedTopPillars 中最大 idx）
   let backIdx = c.pillarIdx;
   while (backIdx > 0 && !game.visitedTopPillars[backIdx]) backIdx--;
@@ -5308,6 +5321,11 @@ let bgmState = {
   schedTimer: null,    // setTimeout id
   startedAt: 0,        // 循环起始 audioCtx.time
   beatIdx: 0,          // 已经调度过的拍子序号
+  // === 动态 BGM 状态（v1.6 灵性 BGM）===
+  keyShift: 0,          // combo 升 key 偏移（半音数）：0=C, 2=D, 4=E, 7=G
+  surgeBPM: false,      // SURGE 期间 BPM 加速（120→160）
+  sadMode: 0,           // 失足小调倒计时（秒），>0 时旋律降 ♭3
+  beatIdx: 0,          // 已经调度过的拍子序号
 };
 const BGM_BPM = 120;
 const BEAT_SEC = 60 / BGM_BPM;        // 0.5s/拍
@@ -5386,20 +5404,28 @@ function bgmScheduleAhead() {
   if (!ac || !bgmState.master) return;
   const lookahead = 0.25;   // 提前 0.25s 调度
   const now = ac.currentTime;
+  // === 动态 BPM：SURGE 时加速到 160 ===
+  const bpm = bgmState.surgeBPM ? 160 : 120;
+  const beatSec = 60 / bpm;
   while (true) {
     const halfBeat = bgmState.beatIdx;
-    const targetT = bgmState.startedAt + halfBeat * (BEAT_SEC / 2);
+    const targetT = bgmState.startedAt + halfBeat * (beatSec / 2);
     if (targetT >= now + lookahead) break;
     if (targetT >= now - 0.05) {  // 不调度过去的
       const halfInLoop = halfBeat % (TOTAL_BEATS * 2);
       const beatInLoop = Math.floor(halfInLoop / 2);
+      // === 动态 keyShift + sadMode ===
+      // combo 升 key：shift 半音数映射到频率倍率
+      const shiftMult = Math.pow(2, bgmState.keyShift / 12);
+      // sadMode：降三度（♭3），给旋律加 "忧郁" 色彩
+      const sadShift = bgmState.sadMode > 0 ? Math.pow(2, -3 / 12) : 1;
       // 主旋律：每个半拍
       const mNote = MELODY[halfInLoop];
-      if (mNote) bgmTone(NOTES[mNote], targetT, 0.18, 'square', 0.05);
+      if (mNote) bgmTone(NOTES[mNote] * shiftMult * sadShift, targetT, 0.18, 'square', 0.05);
       // 贝斯：整拍
       if (halfInLoop % 2 === 0) {
         const bNote = BASS[beatInLoop];
-        if (bNote) bgmTone(NOTES[bNote], targetT, 0.45, 'triangle', 0.10);
+        if (bNote) bgmTone(NOTES[bNote] * shiftMult, targetT, 0.45, 'triangle', 0.10);
         // 鼓点：1、3 拍 kick；2、4 拍 hihat
         if (beatInLoop % 4 === 0 || beatInLoop % 4 === 2) bgmKick(targetT);
         else bgmHiHat(targetT);
@@ -6560,6 +6586,7 @@ function declineRevive() {
   if (!game) return;
   game.reviveDialogOpen = false;
   game.state = 'playing';
+  startBGM();               // 恢复 BGM（stopBGM 在弹窗打开时调用，这里必须补回来）
   // 走原本的失足处理流程
   respawnToLastPillar();
   // 若刚好扣到 0 → 下一帧 update 会触发 GAME OVER
@@ -7264,16 +7291,7 @@ if (typeof roundRect === 'undefined') {
   <div style="font-size:14px;opacity:0.7;line-height:1.6;">本游戏专为竖屏设计<br>请将手机旋转回竖屏方向</div>
 </div>
 
-<!-- 2. 微信"在浏览器打开"引导（仅微信内 + 用户主动触发后显示） -->
-<div id="wxOpenTip" style="display:none;position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,0.85);align-items:flex-start;justify-content:flex-end;padding:20px;flex-direction:column;font-family:-apple-system,sans-serif;" onclick="this.style.display='none'">
-  <div style="position:absolute;top:12px;right:24px;color:#fff;font-size:60px;line-height:1;">↗</div>
-  <div style="color:#fff;font-size:16px;text-align:right;margin-top:80px;line-height:1.8;">
-    点击右上角 <span style="color:#5ddc8c;">···</span><br>
-    选择"<span style="color:#ffd24c;">在浏览器打开</span>"<br>
-    体验更流畅 ✨
-  </div>
-  <div style="color:rgba(255,255,255,0.5);font-size:12px;margin-top:20px;text-align:right;">点击任意位置关闭</div>
-</div>
+<!-- 微信引导已移除：微信内置浏览器体验足够好，不需要引导跳转 -->
 
 <script>
 (function(){
@@ -7288,21 +7306,12 @@ if (typeof roundRect === 'undefined') {
   window.addEventListener('orientationchange', function(){ setTimeout(checkOrientation, 200); });
   checkOrientation();
 
-  // ====== 微信浏览器检测 + 引导提示 ======
+  // ====== 微信浏览器检测 ======
   var ua = navigator.userAgent.toLowerCase();
   var isWX = /micromessenger/.test(ua);
   var isQQ = /qq\//.test(ua);
   window.__isWX = isWX;
   window.__isQQ = isQQ;
-
-  // 微信内首次访问 5 秒后展示一次引导（用户可点掉，本会话不再弹）
-  if (isWX && !sessionStorage.getItem('wxTipShown')) {
-    setTimeout(function(){
-      var tip = document.getElementById('wxOpenTip');
-      if (tip) tip.style.display = 'flex';
-      sessionStorage.setItem('wxTipShown', '1');
-    }, 8000);
-  }
 
   // ====== 禁用微信浏览器双击放大 ======
   var lastTouch = 0;
