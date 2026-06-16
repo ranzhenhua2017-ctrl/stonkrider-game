@@ -1493,7 +1493,7 @@ canvas#game { display: block; width: 100%; height: 100%; position: fixed; top: 0
       <!-- 底部签名 -->
       <div class="bc-footer">
         <div class="bc-quote" id="bcQuote">"市场短期是投票机，长期是称重机。"</div>
-        <div class="bc-sign">— 你也能成为巴菲特 ·  K 线跳一跳</div>
+        <div class="bc-sign" id="bcSign">— 你也能成为巴菲特 ·  K 线跳一跳</div>
       </div>
     </div>
 
@@ -4391,6 +4391,7 @@ function newGame() {
     reviveCount: 0,             // 本局已用复活次数
     reviveDialogOpen: false,    // 复活弹窗是否打开（避免重复触发）
   };
+  mungerScene = null;  // 重置芒格遭遇场景
 }
 
 // ============ 输入：跳一跳同款 - 按住蓄力，松开起跳 ============
@@ -4982,10 +4983,10 @@ function handleLandingPillar(p) {
   if (game.combo > game.maxCombo) game.maxCombo = game.combo;
   flashCombo();
 
-  // 踩到最后一根柱子 = 完赛
+  // 踩到最后一根柱子 = 老友重逢（芒格在终点等你）
   if (p.idx >= game.track.pillars.length - 1) {
     setTimeout(() => {
-      if (game && game.state === 'playing') endGame('win', '收盘走完全程');
+      if (game && game.state === 'playing') startMungerScene();
     }, 500);
   }
 }
@@ -5848,6 +5849,46 @@ function render() {
     ctx.globalAlpha = 1;
   });
 
+  // ====== 芒格遭遇场景渲染 ======
+  if (game.state === 'munger_encounter' && mungerScene) {
+    const m = mungerScene;
+    // 最后一根柱子的屏幕位置
+    const lastP = game.track.pillars[game.track.pillars.length - 1];
+    const mungerBaseX = lastP.centerX - camX + m.mungerX + CFG.charSize * 0.8;  // 巴菲特右侧
+    const mungerBaseY = lastP.topY - camY;
+
+    // 画芒格（只在 phase >= 1 才出现）
+    if (m.phase >= 1) {
+      drawMunger(mungerBaseX, mungerBaseY, m.mungerAlpha);
+    }
+
+    // 画气泡（只在 phase >= 2）
+    if (m.phase >= 2) {
+      // 气泡位置：芒格头顶偏上
+      const bubbleX = mungerBaseX;
+      const bubbleY = mungerBaseY - CFG.charSize * 2.5;
+      drawSpeechBubble(bubbleX, bubbleY, m.quote, m.shownChars, m.bubbleScale);
+    }
+
+    // 淡出遮罩（phase 4）
+    if (m.fadeAlpha > 0.01) {
+      ctx.fillStyle = `rgba(10,14,20,${m.fadeAlpha})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // 画面底部显示"老友重逢"小标题（phase 1~3）
+    if (m.phase >= 1 && m.phase <= 3) {
+      const subAlpha = Math.min(1, m.mungerAlpha);
+      ctx.save();
+      ctx.globalAlpha = subAlpha * 0.6;
+      ctx.fillStyle = '#c8a060';
+      ctx.font = '600 13px -apple-system, "PingFang SC", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('— 老友重逢 —', W/2, H - 50);
+      ctx.restore();
+    }
+  }
+
   // 全屏闪
   if (game.flashRed > 0.01) { ctx.fillStyle = `rgba(255,59,48,${game.flashRed*0.3})`; ctx.fillRect(0, 0, W, H); }
   if (game.flashGreen > 0.01) { ctx.fillStyle = `rgba(93,220,140,${game.flashGreen*0.2})`; ctx.fillRect(0, 0, W, H); }
@@ -6002,6 +6043,315 @@ function drawChargeRingAndParticles(sx, footY) {
     ctx.fill();
   }
   ctx.shadowBlur = 0;
+
+  ctx.restore();
+}
+
+// ============ 芒格语录池（完赛时随机选一条，老友重逢） ============
+const MUNGER_QUOTES = [
+  '我这辈子认识的聪明人，没有一个是不每天阅读的。',
+  '反过来想，总是反过来想。',
+  '好的投资机会是罕见的。当它来临时，你要重仓出击。',
+  '不要和猪摔跤。你们俩都会弄脏，而猪喜欢这样。',
+  '多读书，少犯错，活得久。',
+  '拿得住，才是真本事。',
+  '认识你能力圈的边界，比圈的大小重要得多。',
+  '我只想知道将来我会死在什么地方，这样我就永远不去那儿。',
+];
+
+// ============ 芒格遭遇场景状态 ============
+// 当玩家踩到最后一根K线柱，进入此场景
+// 时间线：0-0.5s 镜头稳定 → 0.5-1.8s 芒格出现 → 1.8-2.3s 气泡生长 → 2.3-5.5s 打字机 → 5.5-6.0s 过渡到结算
+let mungerScene = null;
+
+function startMungerScene() {
+  const quote = MUNGER_QUOTES[Math.floor(Math.random() * MUNGER_QUOTES.length)];
+  mungerScene = {
+    phase: 0,         // 0=settle, 1=munger_in, 2=bubble_grow, 3=type, 4=fade_out
+    timer: 0,
+    quote: quote,
+    shownChars: 0,    // 打字机已显示字数
+    mungerAlpha: 0,   // 芒格透明度
+    mungerX: 0,       // 芒格 X 偏移（从柱后走出来）
+    bubbleScale: 0,   // 气泡缩放
+    fadeAlpha: 0,     // 全屏淡出
+    done: false,
+  };
+  game.state = 'munger_encounter';
+  // 隐藏 HUD 和暂停按钮，让场景沉浸
+  hud.style.display = 'none';
+  pauseBtn.classList.remove('show'); if(typeof bgmBtn!=='undefined' && bgmBtn) bgmBtn.classList.remove('show');
+  chargeBar.classList.add('hidden-bar');
+  tapHint.classList.remove('show');
+  // 保持 BGM 播放（不关），让它成为情感铺垫
+}
+
+function updateMungerScene(dt) {
+  if (!mungerScene || mungerScene.done) return;
+  const m = mungerScene;
+  m.timer += dt;
+
+  // Phase 0: 镜头稳定（0 ~ 0.5s）
+  if (m.phase === 0) {
+    if (m.timer >= 0.5) { m.phase = 1; m.timer = 0; }
+  }
+  // Phase 1: 芒格淡入走出来（0 ~ 1.3s）
+  else if (m.phase === 1) {
+    const t = Math.min(1, m.timer / 1.3);
+    const ease = 1 - Math.pow(1 - t, 3);  // easeOutCubic
+    m.mungerAlpha = ease;
+    m.mungerX = ease * 40;   // 从柱后走出 40px
+    if (t >= 1) { m.phase = 2; m.timer = 0; }
+  }
+  // Phase 2: 气泡生长（0 ~ 0.5s）
+  else if (m.phase === 2) {
+    const t = Math.min(1, m.timer / 0.5);
+    m.bubbleScale = 1 - Math.pow(1 - t, 2);  // easeOutQuad
+    if (t >= 1) { m.phase = 3; m.timer = 0; }
+  }
+  // Phase 3: 打字机（0 ~ 按字数 / 速率）
+  else if (m.phase === 3) {
+    const charsPerSec = 4.5;   // 每秒打出 4.5 个字
+    m.shownChars = Math.min(m.quote.length, Math.floor(m.timer * charsPerSec));
+    // 打完后等 2.5 秒
+    if (m.shownChars >= m.quote.length && m.timer > m.quote.length / charsPerSec + 2.5) {
+      m.phase = 4; m.timer = 0;
+    }
+  }
+  // Phase 4: 淡出 → 进入结算
+  else if (m.phase === 4) {
+    const t = Math.min(1, m.timer / 0.8);
+    m.fadeAlpha = t;
+    if (t >= 1) {
+      m.done = true;
+      endGame('win', '收盘走完全程');
+    }
+  }
+}
+
+// 画芒格卡通小人（大头Q版，与巴菲特同比例但有自己的特征）
+function drawMunger(sx, footY, alpha) {
+  const s = CFG.charSize;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  ctx.translate(sx, footY);
+
+  // 阴影
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.beginPath();
+  ctx.ellipse(0, 4, s * 0.55, 3.5, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // 脚（深棕色皮鞋）
+  ctx.fillStyle = '#3a2a1a';
+  roundRect(ctx, -s*0.30, -s*0.06, s*0.24, s*0.10, 3); ctx.fill();
+  roundRect(ctx, s*0.06,  -s*0.06, s*0.24, s*0.10, 3); ctx.fill();
+
+  // 身体（深藏青西装，比巴菲特的更偏蓝）
+  ctx.fillStyle = '#1a2a40';
+  roundRect(ctx, -s*0.40, -s*0.70, s*0.80, s*0.65, 8);
+  ctx.fill();
+
+  // 西装翻领（V形，更暗）
+  ctx.fillStyle = '#0f1828';
+  ctx.beginPath();
+  ctx.moveTo(-s*0.20, -s*0.70);
+  ctx.lineTo(0, -s*0.40);
+  ctx.lineTo(s*0.20, -s*0.70);
+  ctx.closePath();
+  ctx.fill();
+
+  // 白衬衫（更宽的领口——芒格不系领带，敞开衬衫）
+  ctx.fillStyle = '#f0f0f0';
+  ctx.beginPath();
+  ctx.moveTo(-s*0.15, -s*0.70);
+  ctx.lineTo(-s*0.05, -s*0.38);
+  ctx.lineTo(s*0.05, -s*0.38);
+  ctx.lineTo(s*0.15, -s*0.70);
+  ctx.closePath();
+  ctx.fill();
+
+  // 不打领带！芒格的标志：敞开衬衫领口
+
+  // 头（肉色，圆，大头Q版）
+  ctx.fillStyle = '#f4d4ad';
+  ctx.beginPath();
+  ctx.arc(0, -s*1.20, s*0.50, 0, Math.PI*2);
+  ctx.fill();
+
+  // 脖子
+  ctx.fillStyle = '#e8c194';
+  ctx.fillRect(-s*0.10, -s*0.78, s*0.20, s*0.10);
+
+  // 头发（芒格特色：整齐偏分白发，不像巴菲特的波浪卷）
+  ctx.fillStyle = '#e8e8e8';
+  // 顶部偏分发型（左侧多，右侧少）
+  ctx.beginPath();
+  ctx.moveTo(-s*0.42, -s*1.25);
+  ctx.bezierCurveTo(-s*0.45, -s*1.55, -s*0.15, -s*1.68, s*0.05, -s*1.60);
+  ctx.bezierCurveTo(s*0.20, -s*1.55, s*0.35, -s*1.60, s*0.42, -s*1.50);
+  ctx.bezierCurveTo(s*0.44, -s*1.40, s*0.42, -s*1.30, s*0.40, -s*1.20);
+  ctx.bezierCurveTo(s*0.30, -s*1.28, s*0.15, -s*1.30, 0, -s*1.28);
+  ctx.bezierCurveTo(-s*0.15, -s*1.30, -s*0.30, -s*1.28, -s*0.40, -s*1.25);
+  ctx.closePath();
+  ctx.fill();
+  // 偏分线（左边厚，右边薄）
+  ctx.beginPath();
+  ctx.moveTo(s*0.02, -s*1.60);
+  ctx.lineTo(s*0.05, -s*1.30);
+  ctx.strokeStyle = '#c8c8c8';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // 鬓角
+  ctx.fillStyle = '#e8e8e8';
+  ctx.beginPath();
+  ctx.ellipse(-s*0.44, -s*1.08, s*0.08, s*0.16, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(s*0.44, -s*1.08, s*0.08, s*0.16, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // 眼镜（圆框！芒格的标志是圆眼镜，比巴菲特的椭圆更圆）
+  ctx.strokeStyle = '#8a7a60';  // 深棕色镜框
+  ctx.lineWidth = 2.5;
+  // 左镜片（更圆）
+  ctx.beginPath();
+  ctx.arc(-s*0.18, -s*1.18, s*0.12, 0, Math.PI*2);
+  ctx.stroke();
+  // 右镜片
+  ctx.beginPath();
+  ctx.arc(s*0.18, -s*1.18, s*0.12, 0, Math.PI*2);
+  ctx.stroke();
+  // 鼻梁
+  ctx.beginPath();
+  ctx.moveTo(-s*0.06, -s*1.18);
+  ctx.lineTo(s*0.06, -s*1.18);
+  ctx.stroke();
+  // 镜片反光
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.beginPath();
+  ctx.ellipse(-s*0.21, -s*1.22, s*0.035, s*0.025, -0.3, 0, Math.PI*2);
+  ctx.ellipse(s*0.15, -s*1.22, s*0.035, s*0.025, -0.3, 0, Math.PI*2);
+  ctx.fill();
+
+  // 眉毛（深色粗眉，微微皱起——智者感）
+  ctx.strokeStyle = '#a0a0a0';
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-s*0.28, -s*1.35);
+  ctx.quadraticCurveTo(-s*0.18, -s*1.40, -s*0.08, -s*1.35);
+  ctx.moveTo(s*0.08, -s*1.35);
+  ctx.quadraticCurveTo(s*0.18, -s*1.40, s*0.28, -s*1.35);
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+
+  // 眼睛（笑眯眯，但比巴菲特更深邃——智慧长者的微笑）
+  ctx.strokeStyle = '#1a1a1a';
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(-s*0.18, -s*1.16, s*0.05, 0.2 * Math.PI, 0.8 * Math.PI);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(s*0.18, -s*1.16, s*0.05, 0.2 * Math.PI, 0.8 * Math.PI);
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+
+  // 嘴巴（温和微笑，和巴菲特的咧嘴不同——更含蓄）
+  ctx.strokeStyle = '#a05040';
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(0, -s*1.02, s*0.08, 0.15 * Math.PI, 0.85 * Math.PI);
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+
+  ctx.restore();
+}
+
+// 画对话气泡（芒格说话）
+function drawSpeechBubble(cx, cy, text, shownChars, scale) {
+  if (scale <= 0.01) return;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(scale, scale);
+
+  // 计算文字尺寸
+  const fontSize = 15;
+  ctx.font = `600 ${fontSize}px -apple-system, "PingFang SC", sans-serif`;
+  const maxW = 220;
+  // 按显示字数截断
+  const displayText = text.substring(0, shownChars);
+  // 手动换行
+  const lines = [];
+  let line = '';
+  for (const ch of displayText) {
+    const test = line + ch;
+    if (ctx.measureText(test).width > maxW) {
+      lines.push(line);
+      line = ch;
+    } else {
+      line = test;
+    }
+  }
+  if (line) lines.push(line);
+
+  const lineH = fontSize * 1.6;
+  const padX = 16, padY = 12;
+  const bw = maxW + padX * 2;
+  const bh = lines.length * lineH + padY * 2;
+  const bx = -bw / 2, by = -bh - 20;  // 气泡在说话者头顶上方
+
+  // 气泡背景（暖黄色调，像旧书页——老友的温暖）
+  ctx.fillStyle = 'rgba(45,35,20,0.92)';
+  ctx.strokeStyle = 'rgba(200,170,100,0.6)';
+  ctx.lineWidth = 2;
+  roundRect(ctx, bx, by, bw, bh, 12);
+  ctx.fill();
+  ctx.stroke();
+
+  // 气泡小尾巴（朝下指向说话者）
+  ctx.fillStyle = 'rgba(45,35,20,0.92)';
+  ctx.beginPath();
+  ctx.moveTo(-8, by + bh);
+  ctx.lineTo(8, by + bh);
+  ctx.lineTo(0, by + bh + 12);
+  ctx.closePath();
+  ctx.fill();
+  // 尾巴描边
+  ctx.strokeStyle = 'rgba(200,170,100,0.6)';
+  ctx.beginPath();
+  ctx.moveTo(-8, by + bh);
+  ctx.lineTo(0, by + bh + 12);
+  ctx.lineTo(8, by + bh);
+  ctx.stroke();
+
+  // 文字（金色，像芒格的金句）
+  ctx.fillStyle = '#ffd24c';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  lines.forEach((l, i) => {
+    ctx.fillText(l, 0, by + padY + i * lineH);
+  });
+
+  // 左上角标签"芒格"
+  ctx.fillStyle = 'rgba(200,170,100,0.7)';
+  ctx.font = '600 10px -apple-system, "PingFang SC", sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('— 芒格', bx + padX, by + 5);
+
+  // 打字机光标闪烁
+  if (shownChars < text.length) {
+    const cursorAlpha = 0.5 + 0.5 * Math.sin(Date.now() * 0.008);
+    ctx.fillStyle = `rgba(255,210,76,${cursorAlpha})`;
+    const lastLine = lines[lines.length - 1] || '';
+    const cursorX = ctx.measureText(lastLine).width / 2 + 4;
+    const cursorY = by + padY + (lines.length - 1) * lineH + 2;
+    ctx.fillRect(cursorX, cursorY, 2, fontSize);
+  }
 
   ctx.restore();
 }
@@ -6416,6 +6766,7 @@ function loop(t) {
   const dt = Math.min(0.05, (t - lastT) / 1000);
   lastT = t;
   if (game && game.state === 'playing') { update(dt); updateHUD(); }
+  if (game && game.state === 'munger_encounter') { updateMungerScene(dt); }
   if (game) render();
   requestAnimationFrame(loop);
 }
@@ -6773,19 +7124,29 @@ function endGame(result, msg) {
   $('bcBadgeEmoji').textContent = badgeEmoji;
   $('bcBadgeText').textContent = badgeText;
 
-  // 7. 大佬名言（随机一条契合的）
-  const QUOTES = isWin ? [
-    '"在别人贪婪时恐惧，在别人恐惧时贪婪。"',
-    '"我从不试图猜测市场，我只是不为之所动。"',
-    '"风险来自于你不知道自己在做什么。"',
-    '"如果你不愿意持有十年，就不要持有十分钟。"',
-  ] : [
-    '"市场短期是投票机，长期是称重机。"',
-    '"亏损不是问题，从亏损中学不到东西才是问题。"',
-    '"投资最大的敌人是你自己。"',
-    '"只有当潮水退去，才知道谁在裸泳。"',
-  ];
-  $('bcQuote').textContent = QUOTES[Math.floor(Math.random() * QUOTES.length)];
+  // 7. 大佬名言（完赛时用芒格刚才说的那句话，亏损时用巴菲特安慰）
+  let quoteText;
+  if (isWin) {
+    // 赢了：用芒格遭遇场景里选的那句金句，保证和画面一致
+    quoteText = (mungerScene && mungerScene.quote) ? `"${mungerScene.quote}"` : `"${MUNGER_QUOTES[Math.floor(Math.random() * MUNGER_QUOTES.length)]}"`;
+    quoteText += ' — 查理·芒格';
+  } else {
+    // 亏了：巴菲特的安慰
+    const LOSE_QUOTES = [
+      '"市场短期是投票机，长期是称重机。"',
+      '"亏损不是问题，从亏损中学不到东西才是问题。"',
+      '"投资最大的敌人是你自己。"',
+      '"只有当潮水退去，才知道谁在裸泳。"',
+    ];
+    quoteText = LOSE_QUOTES[Math.floor(Math.random() * LOSE_QUOTES.length)];
+  }
+  $('bcQuote').textContent = quoteText;
+
+  // 赢时：底部签名归芒格；亏时：归巴菲特
+  const bcSign = $('bcSign');
+  if (bcSign) {
+    bcSign.textContent = isWin ? '— 查理·芒格 · 老友重逢' : '— 你也能成为巴菲特 · K 线跳一跳';
+  }
 
   // 保存 best
   const bestKey = 'best_' + game.level.code + '_' + (game.level.timeframe || 'day');
